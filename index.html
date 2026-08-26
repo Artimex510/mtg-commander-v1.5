@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MTG Commander Companion</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <style>
+    body { -webkit-font-smoothing: antialiased; overflow-x: hidden; user-select: none; -webkit-touch-callout: none; background-color: #000; }
+    .animate-fade { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes splashFade { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
+    button { touch-action: manipulation; }
+
+    @media print {
+      body { background: white !important; color: black; }
+      .no-print { display: none !important; }
+      .print-grid { display: grid; grid-template-columns: repeat(3, 63mm); gap: 2mm; justify-content: center; }
+      .print-card { width: 63mm; height: 88mm; object-fit: cover; border-radius: 3mm; margin-bottom: 2mm; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const Icons = {
+      Menu: () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>,
+      Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
+      Back: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>,
+      Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    };
+
+    const ManaColors = [
+      { id: 'W', color: 'bg-yellow-100 text-yellow-900', label: 'W' },
+      { id: 'U', color: 'bg-blue-500 text-white', label: 'U' },
+      { id: 'B', color: 'bg-gray-800 text-white', label: 'B' },
+      { id: 'R', color: 'bg-red-500 text-white', label: 'R' },
+      { id: 'G', color: 'bg-green-500 text-white', label: 'G' },
+      { id: 'C', color: 'bg-gray-400 text-gray-900', label: 'C' }
+    ];
+
+    function App() {
+      const [showSplash, setShowSplash] = useState(true);
+      const [view, setView] = useState('home');
+      const [menuOpen, setMenuOpen] = useState(false);
+      const [activeDeck, setActiveDeck] = useState(null); 
+      
+      useEffect(() => {
+        const timer = setTimeout(() => { setShowSplash(false); }, 3000);
+        return () => clearTimeout(timer);
+      }, []);
+
+      const navigate = (newView, deck = null) => { setActiveDeck(deck); setView(newView); setMenuOpen(false); };
+
+      if (showSplash) {
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black" style={{ animation: 'splashFade 3.5s forwards' }}>
+            <img src="mtg-bg.jpg" alt="Splash" className="w-full h-full object-cover" />
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen flex flex-col text-gray-100 bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('mtg-bg.jpg')" }}>
+          <div className="min-h-screen bg-gray-900/85 backdrop-blur-sm flex flex-col">
+            
+            {view !== 'game_active' && (
+              <header className="bg-gray-900/95 border-b border-gray-700 p-4 flex justify-between items-center fixed top-0 w-full z-50 shadow-md no-print">
+                <button onClick={() => setMenuOpen(true)} className="text-gray-300 hover:text-white"><Icons.Menu /></button>
+                <h1 className="text-lg font-bold tracking-widest text-white">MTG <span className="text-red-500">FOR FUN</span></h1>
+                <button onClick={() => navigate('home')} className="text-gray-300 hover:text-white"><Icons.Home /></button>
+              </header>
+            )}
+
+            {menuOpen && (
+              <div className="fixed inset-0 bg-black/80 z-50 no-print" onClick={() => setMenuOpen(false)}>
+                <div className="w-64 bg-gray-900 h-full p-6 shadow-2xl border-r border-gray-700" onClick={e => e.stopPropagation()}>
+                  <h2 className="text-2xl font-bold mb-6 border-b border-gray-700 pb-2">Menu</h2>
+                  <nav className="space-y-4">
+                    <MenuBtn icon={<Icons.Home/>} text="Home" onClick={() => navigate('home')} />
+                    <MenuBtn icon="🎴" text="Deckbuilding" onClick={() => navigate('deckbuilder')} />
+                    <MenuBtn icon="📚" text="I Miei Mazzi" onClick={() => navigate('mydecks')} />
+                    <MenuBtn icon="✨" text="Proxy Creator" onClick={() => navigate('proxycreator')} />
+                    <MenuBtn icon="⚔️" text="Life Tracker" onClick={() => navigate('game')} />
+                    <MenuBtn icon="🎲" text="Lancia Dado" onClick={() => navigate('dice')} />
+                    <MenuBtn icon="⚖️" text="Regole & Judge" onClick={() => navigate('rules')} />
+                  </nav>
+                </div>
+              </div>
+            )}
+
+            <main className={`${view !== 'game_active' ? 'pt-20 px-2 pb-10' : ''} flex-1 animate-fade relative z-10`}>
+              {view === 'home' && <HomeView navigate={navigate} />}
+              {view === 'deckbuilder' && <DeckBuilder navigate={navigate} activeDeck={activeDeck} />}
+              {view === 'mydecks' && <MyDecks navigate={navigate} />}
+              {view === 'analysis' && <DeckAnalysis deck={activeDeck} navigate={navigate} />}
+              {view === 'proxycreator' && <ProxyCreatorLair />}
+              {view === 'printview' && <PrintView deck={activeDeck} navigate={navigate} />}
+              {(view === 'game' || view === 'game_active') && <GameUtility view={view} setView={setView} />}
+              {view === 'dice' && <DiceRoller />}
+              {view === 'rules' && <RulesAI />}
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    const MenuBtn = ({icon, text, onClick}) => (
+      <button onClick={onClick} className="w-full flex items-center space-x-3 text-gray-300 hover:text-white p-2 rounded hover:bg-gray-800">
+        <span className="flex items-center justify-center w-6 h-6">{icon}</span> <span className="font-semibold">{text}</span>
+      </button>
+    );
+
+    // --- HOME ---
+    const HomeView = ({navigate}) => (
+      <div className="flex flex-col items-center justify-center pt-8">
+        <div className="mb-12 text-center">
+          <h2 className="text-5xl font-black text-white drop-shadow-[0_5px_5px_rgba(0,0,0,1)] tracking-widest">FOR FUN</h2>
+          <h3 className="text-3xl font-black text-red-500 drop-shadow-md">EDITION</h3>
+          <p className="text-gray-400 mt-2 font-semibold">Your Ultimate Commander Companion</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+          <ActionCard icon="🎴" text="Crea Mazzo" onClick={() => navigate('deckbuilder')} color="bg-blue-900/80 hover:bg-blue-800" />
+          <ActionCard icon="📚" text="I Miei Mazzi" onClick={() => navigate('mydecks')} color="bg-emerald-900/80 hover:bg-emerald-800" />
+          <ActionCard icon="✨" text="Proxy Lair" onClick={() => navigate('proxycreator')} color="bg-purple-900/80 hover:bg-purple-800" />
+          <ActionCard icon="⚔️" text="Life Tracker" onClick={() => navigate('game')} color="bg-red-900/80 hover:bg-red-800" />
+        </div>
+      </div>
+    );
+
+    const ActionCard = ({icon, text, onClick, color}) => (
+      <button onClick={onClick} className={`${color} p-6 rounded-xl flex flex-col items-center justify-center border border-gray-600 shadow-xl active:scale-95 transition-all backdrop-blur-md`}>
+        <div className="text-4xl mb-2 drop-shadow-md">{icon}</div>
+        <span className="font-bold text-sm tracking-wide">{text}</span>
+      </button>
+    );
+
+    // --- DECKBUILDER (CON FORMATI, BANLIST E INLINE PROXY) ---
+    const DeckBuilder = ({navigate, activeDeck}) => {
+      const [deckName, setDeckName] = useState(activeDeck ? activeDeck.name : "");
+      const [deckFormat, setDeckFormat] = useState(activeDeck ? (activeDeck.format || 'commander') : 'commander');
+      const [deck, setDeck] = useState(activeDeck ? activeDeck.cards : []);
+      const [rulebreaker, setRulebreaker] = useState(activeDeck ? (activeDeck.rulebreaker || false) : false);
+      
+      const [query, setQuery] = useState("");
+      const [mana, setMana] = useState([]);
+      const [cardType, setCardType] = useState("");
+      const [subType, setSubType] = useState("");
+      
+      const [results, setResults] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [pageUrls, setPageUrls] = useState([]);
+      const [currentPageIdx, setCurrentPageIdx] = useState(0);
+      
+      const [selectedCard, setSelectedCard] = useState(null);
+      const [addQty, setAddQty] = useState(1); 
+      
+      const [importText, setImportText] = useState("");
+      const [showImport, setShowImport] = useState(false);
+
+      // Stato per la modifica Proxy inline
+      const [editingProxyCard, setEditingProxyCard] = useState(null);
+
+      const toggleMana = (m) => setMana(mana.includes(m) ? mana.filter(x => x !== m) : [...mana, m]);
+
+      const eseguiRicerca = (url, isNewSearch = false) => {
+        setLoading(true);
+        fetch(url)
+          .then(res => res.json())
+          .then(data => {
+            if (data.data) {
+               // Aggiungo il recupero di 'legalities' di Scryfall
+               const cards = data.data.filter(c => c.image_uris || (c.card_faces && c.card_faces[0].image_uris)).map(c => {
+                 let img = null;
+                 if (c.image_uris) img = c.image_uris.normal;
+                 else if (c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
+                 return {
+                   id: c.id, name: c.name, image: img, type: c.type_line, cmc: c.cmc, colors: c.color_identity || [], legalities: c.legalities, isCommander: false
+                 };
+               });
+               setResults(cards);
+
+               if (isNewSearch) {
+                  setPageUrls([url, data.next_page || null]);
+                  setCurrentPageIdx(0);
+               } else {
+                  if (data.next_page) {
+                     let newUrls = [...pageUrls];
+                     newUrls[currentPageIdx + 1] = data.next_page;
+                     setPageUrls(newUrls);
+                  }
+               }
+            } else { 
+               if(isNewSearch) { setResults([]); alert("Nessuna carta trovata!"); }
+            }
+            setLoading(false);
+          })
+          .catch(e => { console.error(e); setLoading(false); });
+      };
+
+      const searchCard = () => {
+        let searchQuery = query ? `${query} ` : "";
+        if (mana.length > 0) {
+           if (cardType === 'land') searchQuery += `id>=${mana.join('')} `;
+           else searchQuery += `c>=${mana.join('')} `;
+        }
+        if (cardType) searchQuery += `t:${cardType} `;
+        if (subType) searchQuery += `t:${subType} `;
+        
+        if(!searchQuery.trim()) return alert("Inserisci almeno un parametro di ricerca!");
+        eseguiRicerca(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(searchQuery.trim())}`, true);
+      };
+
+      const loadMyProxies = () => {
+        const proxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
+        if (proxies.length === 0) return alert("Non hai ancora creato nessuna Proxy!");
+        setResults(proxies);
+        setPageUrls([]);
+        setCurrentPageIdx(0);
+      };
+
+      const goToNextPage = () => {
+         if (currentPageIdx + 1 < pageUrls.length && pageUrls[currentPageIdx + 1]) {
+            let nextIdx = currentPageIdx + 1;
+            setCurrentPageIdx(nextIdx);
+            eseguiRicerca(pageUrls[nextIdx], false);
+         }
+      };
+
+      const goToPrevPage = () => {
+         if (currentPageIdx > 0) {
+            let prevIdx = currentPageIdx - 1;
+            setCurrentPageIdx(prevIdx);
+            eseguiRicerca(pageUrls[prevIdx], false);
+         }
+      };
+
+      const addToDeckMulti = () => {
+        let newCards = [];
+        for(let i=0; i<addQty; i++) {
+           newCards.push({...selectedCard, deckId: 'card-' + Date.now() + '-' + Math.random()});
+        }
+        setDeck([...deck, ...newCards]);
+        setSelectedCard(null);
+        setAddQty(1);
+      };
+
+      const saveDeck = () => {
+        if(!deckName) return alert("Dai un nome al mazzo!");
+        let savedDecks = JSON.parse(localStorage.getItem('mtg_decks') || '[]');
+        const newDeckObj = { id: activeDeck ? activeDeck.id : Date.now(), name: deckName, format: deckFormat, cards: deck, rulebreaker: rulebreaker, date: new Date().toLocaleDateString() };
+        if(activeDeck) savedDecks = savedDecks.map(d => d.id === activeDeck.id ? newDeckObj : d);
+        else savedDecks.push(newDeckObj);
+        localStorage.setItem('mtg_decks', JSON.stringify(savedDecks));
+        alert("Mazzo Salvato!");
+        navigate('mydecks');
+      };
+
+      const handleImport = () => {
+        if(!importText.trim()) return;
+        setLoading(true);
+        const lines = importText.split('\n');
+        let promises = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i].trim();
+          if(!line) continue;
+          const match = line.match(/^(\d+)?\s*(.*)$/);
+          let qty = match[1] ? parseInt(match[1]) : 1;
+          let name = match[2];
+          
+          let p = fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`)
+            .then(res => { if(res.ok) return res.json(); throw new Error('Not found'); })
+            .then(c => {
+               let arr = [];
+               for(let j=0; j<qty; j++) {
+                 let img = null;
+                 if (c.image_uris) img = c.image_uris.normal;
+                 else if (c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
+                 arr.push({
+                   id: c.id + '-' + j + Date.now() + Math.random(), deckId: 'import-' + Date.now() + '-' + Math.random() + '-' + j,
+                   name: c.name, image: img, type: c.type_line, cmc: c.cmc, colors: c.color_identity || [], legalities: c.legalities, isCommander: false
+                 });
+               }
+               return arr;
+            })
+            .catch(e => { return []; });
+          promises.push(p);
+        }
+        
+        Promise.all(promises).then(resultsArray => {
+           let newCards = [];
+           resultsArray.forEach(arr => { newCards = newCards.concat(arr); });
+           setDeck(prev => prev.concat(newCards));
+           setShowImport(false); setImportText(""); setLoading(false);
+        });
+      };
+
+      // SALVATAGGIO PROXY INLINE (aggiorna la carta nel mazzo)
+      const saveInlineProxy = (updatedCard) => {
+         setDeck(deck.map(c => c.deckId === updatedCard.deckId ? updatedCard : c));
+         setEditingProxyCard(null);
+      };
+
+      // --- CONTROLLO REGOLE E LEGALITA' MULTIFORMATO ---
+      let warnings = [];
+      const commanders = deck.filter(c => c.isCommander);
+      const cmdColors = new Set();
+      commanders.forEach(c => { if (c.colors) c.colors.forEach(col => cmdColors.add(col)); });
+
+      if (!rulebreaker) {
+         // Dimensioni
+         if (deckFormat === 'commander' && deck.length !== 100) warnings.push(`Commander: il mazzo deve avere 100 carte esatte (ora ${deck.length}).`);
+         if ((deckFormat === 'pauper' || deckFormat === 'modern') && deck.length < 60) warnings.push(`${deckFormat.toUpperCase()}: minimo 60 carte (ora ${deck.length}).`);
+
+         // Comandante
+         if (deckFormat === 'commander') {
+             if (commanders.length === 0) warnings.push("Commander: Manca il Comandante.");
+             if (commanders.length > 0 && commanders.some(c => c.type && !c.type.toLowerCase().includes("legendary") && !c.type.toLowerCase().includes("planeswalker"))) {
+                warnings.push("Il Comandante dev'essere una Creatura Leggendaria o Planeswalker valido.");
+             }
+         }
+
+         let hasIllegalColor = false;
+         let nameCounts = {};
+         const multiCopyAllowed = ["relentless rats", "rat colony", "shadowborn apostle", "persistent petitioners", "dragon's approach", "slime against humanity", "nazgûl"];
+
+         deck.forEach(c => {
+            // Legalità formato via Scryfall API!
+            if (c.legalities) {
+                if (c.legalities[deckFormat] !== 'legal' && c.legalities[deckFormat] !== 'restricted') {
+                    if(!warnings.includes(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`)) {
+                        warnings.push(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`);
+                    }
+                }
+            }
+
+            // Identità colore Commander
+            if (deckFormat === 'commander' && !c.isCommander && c.colors && c.colors.length > 0) {
+               if (cmdColors.size === 0) hasIllegalColor = true;
+               else c.colors.forEach(col => { if (!cmdColors.has(col)) hasIllegalColor = true; });
+            }
+
+            // Conteggio copie per Singleton (Cmdr) o x4 (Modern/Pauper)
+            let nLower = c.name.toLowerCase();
+            let isBasic = c.type && c.type.toLowerCase().includes("basic");
+            let canBypassCount = isBasic || multiCopyAllowed.includes(nLower);
+
+            nameCounts[c.name] = (nameCounts[c.name] || 0) + 1;
+            
+            if (!canBypassCount) {
+               if (deckFormat === 'commander' && nameCounts[c.name] > 1) {
+                  if(!warnings.includes(`Regola Singleton violata: hai troppe copie di "${c.name}".`)) warnings.push(`Regola Singleton violata: hai troppe copie di "${c.name}".`);
+               }
+               if (deckFormat !== 'commander' && nameCounts[c.name] > 4) {
+                  if(!warnings.includes(`Massimo 4 copie superato per "${c.name}".`)) warnings.push(`Massimo 4 copie superato per "${c.name}".`);
+               }
+            }
+         });
+
+         if (hasIllegalColor) warnings.push("Hai inserito carte fuori dall'Identità di Colore del Comandante.");
+      }
+
+      const totalCMC = deck.reduce((acc, c) => acc + (c.cmc || 0), 0);
+      const avgCMC = deck.length > 0 ? (totalCMC / deck.length).toFixed(2) : 0;
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-4 relative">
+          
+          {/* MODALE ANTEPRIMA RICERCA FISSA */}
+          {selectedCard && (
+            <div className="fixed inset-0 bg-black/95 z-[100] h-[100dvh] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setSelectedCard(null)}>
+              <div onClick={e => e.stopPropagation()} className="max-w-md w-full flex flex-col items-center">
+                 <img src={selectedCard.proxyImage || selectedCard.image} alt={selectedCard.name} className="w-auto max-h-[55vh] object-contain rounded-xl mb-4 shadow-2xl" />
+                 
+                 <div className="bg-gray-800 rounded-xl w-full p-4 flex flex-col gap-3 shadow-xl border border-gray-600">
+                    <div className="flex justify-between items-center bg-gray-900 rounded-lg p-2 border border-gray-700">
+                       <span className="text-gray-400 font-bold px-2">Aggiungi Copie:</span>
+                       <div className="flex items-center gap-4">
+                          <button onClick={()=>setAddQty(Math.max(1, addQty-1))} className="w-10 h-10 bg-red-600 hover:bg-red-500 rounded font-bold text-xl text-white shadow">-</button>
+                          <span className="text-2xl font-black text-white w-6 text-center">{addQty}</span>
+                          <button onClick={()=>setAddQty(addQty+1)} className="w-10 h-10 bg-green-600 hover:bg-green-500 rounded font-bold text-xl text-white shadow">+</button>
+                       </div>
+                    </div>
+                    <div className="flex gap-2 w-full mt-2">
+                      <button onClick={() => setSelectedCard(null)} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg shadow">Annulla</button>
+                      <button onClick={addToDeckMulti} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow">+ Aggiungi</button>
+                    </div>
+                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODALE INLINE PROXY CREATOR */}
+          {editingProxyCard && (
+             <ProxyInlineEditor card={editingProxyCard} onClose={() => setEditingProxyCard(null)} onSave={saveInlineProxy} />
+          )}
+
+          <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
+            <input type="text" placeholder="Nome del Mazzo" value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-xl font-bold mb-4" />
+            
+            <div className="flex justify-between items-center bg-gray-900 p-2 rounded border border-gray-700 mb-3">
+              <span className="text-gray-400 text-sm font-bold ml-2">Formato:</span>
+              <select value={deckFormat} onChange={e => setDeckFormat(e.target.value)} className="bg-gray-800 text-white p-2 rounded font-bold border border-gray-600">
+                 <option value="commander">Commander</option>
+                 <option value="pauper">Pauper</option>
+                 <option value="modern">Modern</option>
+              </select>
+            </div>
+
+            <div className="flex justify-between items-center text-sm mb-2">
+              <span className={`px-2 py-1 rounded font-bold ${(deckFormat === 'commander' && deck.length === 100) || (deckFormat !== 'commander' && deck.length >= 60) ? 'bg-green-600' : 'bg-red-600'}`}>{deck.length} Carte</span>
+              <span className="bg-blue-600 px-2 py-1 rounded font-bold">Avg CMC: {avgCMC}</span>
+            </div>
+            
+            {!rulebreaker && warnings.length > 0 && (
+               <div className="bg-red-900/80 border border-red-500 rounded p-3 mt-3 shadow-inner">
+                  <p className="text-red-300 font-bold text-[10px] mb-1 uppercase tracking-wide">⚠️ Controllo Legalità {deckFormat.toUpperCase()}:</p>
+                  <ul className="text-[11px] text-white list-disc list-inside space-y-1 font-semibold pl-1">
+                     {warnings.map((w,i) => <li key={i}>{w}</li>)}
+                  </ul>
+               </div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-yellow-500 font-bold bg-yellow-900/30 p-2 rounded border border-yellow-700 cursor-pointer justify-center mt-3">
+              <input type="checkbox" checked={rulebreaker} onChange={e => setRulebreaker(e.target.checked)} className="accent-yellow-500 w-4 h-4" />
+              Attiva "Rulebreaker" (Ignora restrizioni)
+            </label>
+          </div>
+
+          <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
+             <h3 className="font-bold text-blue-400 mb-2 border-b border-gray-700 pb-1">Ricerca Carte</h3>
+             
+             <div className="flex gap-2 mb-3">
+               <input type="text" placeholder="Ricerca in Inglese (es. Plains)" value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white" />
+             </div>
+             
+             <div className="flex gap-2 mb-3 overflow-x-auto pb-1 justify-center">
+               {ManaColors.map(m => (
+                 <button key={m.id} onClick={() => toggleMana(m.id)} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold border-2 ${mana.includes(m.id) ? 'border-white scale-110' : 'border-transparent opacity-50'} ${m.color}`}>{m.label}</button>
+               ))}
+             </div>
+
+             <div className="grid grid-cols-2 gap-2 mb-4">
+               <select value={cardType} onChange={e => setCardType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm">
+                 <option value="">Tipo...</option>
+                 <option value="creature">Creatura</option>
+                 <option value="artifact">Artefatto</option>
+                 <option value="enchantment">Incantesimo</option>
+                 <option value="instant">Istantaneo</option>
+                 <option value="sorcery">Stregoneria</option>
+                 <option value="land">Terra</option>
+               </select>
+               <input type="text" placeholder="Sottotipo (es. Goblin)" value={subType} onChange={e => setSubType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm" />
+             </div>
+
+             <div className="flex gap-2">
+               <button onClick={searchCard} className="flex-1 bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
+                 {loading && !nextPage ? <span>Cerco...</span> : <span><Icons.Search /> Cerca</span>}
+               </button>
+               <button onClick={loadMyProxies} className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
+                 ✨ Le Mie Proxy
+               </button>
+             </div>
+             <button onClick={() => setShowImport(!showImport)} className="text-sm text-blue-400 hover:text-blue-300 underline mt-4 block text-center w-full">📥 Importa da Testo</button>
+             {showImport && (
+               <div className="mt-2">
+                 <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="1 Sol Ring&#10;1 Command Tower" className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm mb-2"></textarea>
+                 <button onClick={handleImport} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold">{loading ? 'Importo...' : 'Aggiungi Carte'}</button>
+               </div>
+             )}
+          </div>
+
+          {results.length > 0 && (
+            <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 backdrop-blur-sm">
+              <div className="flex justify-between items-center mb-3">
+                 <h3 className="text-gray-300 text-sm font-bold">Risultati:</h3>
+                 <div className="flex items-center gap-2">
+                    <button onClick={goToPrevPage} disabled={currentPageIdx === 0} className={`px-2 py-1 rounded font-bold text-xs ${currentPageIdx === 0 ? 'bg-gray-700 opacity-40' : 'bg-blue-600 text-white'}`}>⬅️</button>
+                    <span className="text-xs font-bold text-gray-300">Pag. {currentPageIdx + 1}</span>
+                    <button onClick={goToNextPage} disabled={!pageUrls[currentPageIdx + 1]} className={`px-2 py-1 rounded font-bold text-xs ${!pageUrls[currentPageIdx + 1] ? 'bg-gray-700 opacity-40' : 'bg-blue-600 text-white'}`}>➡️</button>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {results.map((card, i) => (
+                  <div key={i} className="relative cursor-pointer hover:ring-2 ring-blue-500 rounded shadow-md" onClick={() => { setSelectedCard(card); setAddQty(1); }}>
+                    <img src={card.proxyImage || card.image} alt={card.name} className="w-full rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {deck.length > 0 && (
+            <div className="bg-gray-800/90 p-3 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
+              <h3 className="font-bold text-white mb-3 pl-2">La tua Lista:</h3>
+              <div className="space-y-2">
+                {deck.map((card, index) => (
+                  <div key={card.deckId} className={`flex gap-2 bg-gray-900 p-2 rounded-lg border ${card.isCommander ? 'border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'border-gray-700'}`}>
+                    <img src={card.proxyImage || card.image} alt={card.name} className="w-14 rounded object-cover cursor-pointer shadow" onClick={() => { setSelectedCard({image: card.proxyImage || card.image}); setAddQty(1); }} />
+                    <div className="flex-1 text-sm flex flex-col justify-between">
+                      <h4 className="font-bold text-gray-200 text-xs leading-tight truncate pr-1">{card.name}</h4>
+                      
+                      <div className="flex items-center justify-between mt-1">
+                        {deckFormat === 'commander' && (
+                          <label className="flex items-center gap-1 text-yellow-500 text-[10px] font-bold cursor-pointer">
+                            <input type="checkbox" checked={card.isCommander} onChange={() => {
+                              const newDeck = deck.map(c => c.deckId === card.deckId ? {...c, isCommander: !c.isCommander} : c);
+                              setDeck(newDeck);
+                            }} className="accent-yellow-500" /> Cmdr
+                          </label>
+                        )}
+                        
+                        <div className="flex gap-1 ml-auto">
+                          <button onClick={() => setEditingProxyCard(card)} className="text-[10px] bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded shadow">🎨 Proxy</button>
+                          <button onClick={() => setDeck(deck.filter(c => c.deckId !== card.deckId))} className="text-[10px] bg-red-800 hover:bg-red-700 text-white font-bold px-2 py-1 rounded shadow">✖</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={saveDeck} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(22,163,74,0.5)] sticky bottom-4 z-40">SALVA MAZZO</button>
+        </div>
+      );
+    };
+
+    // --- PROXY INLINE EDITOR (MODALITA' DENTRO IL MAZZO) ---
+    const ProxyInlineEditor = ({card, onClose, onSave}) => {
+      const [customName, setCustomName] = useState("");
+      const [customImg, setCustomImg] = useState("");
+      const [zoom, setZoom] = useState(1);
+      const [posX, setPosX] = useState(50); const [posY, setPosY] = useState(50);
+      const [maskTop, setMaskTop] = useState(11.5); const [maskHeight, setMaskHeight] = useState(44); 
+      const [maskLeft, setMaskLeft] = useState(8.2); const [maskWidth, setMaskWidth] = useState(83.6);
+      const [isGenerating, setIsGenerating] = useState(false);
+
+      const handleImage = (e) => {
+        const file = e.target.files[0];
+        if(file) { const r = new FileReader(); r.onload = (ev) => setCustomImg(ev.target.result); r.readAsDataURL(file); }
+      };
+
+      const eseguiSalvataggio = () => {
+        if(!customImg) return alert("Carica un'immagine!");
+        setIsGenerating(true);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const bImg = new Image();
+        bImg.crossOrigin = "anonymous"; 
+        bImg.src = card.image; // Usa l'immagine originale come base
+
+        bImg.onload = () => {
+          canvas.width = bImg.width; canvas.height = bImg.height; 
+          ctx.drawImage(bImg, 0, 0, canvas.width, canvas.height);
+
+          const uImg = new Image();
+          uImg.src = customImg;
+          uImg.onload = () => {
+             const artX = canvas.width * (maskLeft / 100); const artW = canvas.width * (maskWidth / 100);
+             const artY = canvas.height * (maskTop / 100); const artH = canvas.height * (maskHeight / 100);
+
+             ctx.save(); ctx.beginPath(); ctx.rect(artX, artY, artW, artH); ctx.clip(); 
+
+             const boxAspect = artW / artH; const imgAspect = uImg.width / uImg.height;
+             let baseW, baseH;
+             if (imgAspect > boxAspect) { baseH = artH; baseW = uImg.width * (artH / uImg.height); } 
+             else { baseW = artW; baseH = uImg.height * (artW / uImg.width); }
+             
+             const finalW = baseW * zoom; const finalH = baseH * zoom;
+             const offsetX = finalW * ((posX - 50) / 100); const offsetY = finalH * ((posY - 50) / 100);
+             const imgX = artX + (artW / 2) - (finalW / 2) + offsetX; const imgY = artY + (artH / 2) - (finalH / 2) + offsetY;
+
+             ctx.drawImage(uImg, imgX, imgY, finalW, finalH); ctx.restore();
+
+             if (customName) {
+                const tx = canvas.width * 0.07; const ty = canvas.height * 0.045;
+                const tw = canvas.width * 0.65; const th = canvas.height * 0.055;
+                
+                ctx.fillStyle = "#1a1a1a"; ctx.fillRect(tx, ty, tw, th);
+                ctx.strokeStyle = "#555"; ctx.strokeRect(tx, ty, tw, th);
+                ctx.fillStyle = "white"; ctx.font = `bold ${canvas.height * 0.025}px Georgia, serif`;
+                ctx.fillText(customName, tx + 10, ty + (th/1.8));
+                ctx.fillStyle = "#aaa"; ctx.font = `italic ${canvas.height * 0.015}px Georgia, serif`;
+                ctx.fillText(card.name, tx + 10, ty + (th/1.1));
+             }
+
+             const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+             
+             // Salva anche nel DB Proxy per usi futuri
+             const newProxy = { id: 'proxy-' + Date.now(), name: customName || card.name, image: finalDataUrl, proxyImage: finalDataUrl, type: card.type, cmc: card.cmc || 0, colors: card.colors||[], isCommander: false, isCustom: true };
+             let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
+             savedProxies.push(newProxy); localStorage.setItem('mtg_proxies', JSON.stringify(savedProxies));
+             
+             setIsGenerating(false);
+             
+             // Restituisci la carta aggiornata al Deckbuilder!
+             onSave({...card, proxyImage: finalDataUrl, name: customName || card.name, isCustom: true});
+          };
+        };
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-start pt-10 px-2 overflow-y-auto pb-10 animate-fade">
+           <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
+              <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+                 <h2 className="text-xl font-bold text-purple-400">Modifica: {card.name}</h2>
+                 <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>
+              </div>
+
+              <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold" />
+              <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow">
+                📸 Carica Immagine Proxy <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
+              </label>
+
+              {customImg && (
+                  <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 space-y-3">
+                     <div className="space-y-1">
+                       <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice</p>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Giù</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Dx</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
+                     </div>
+                     <div className="space-y-1 pt-2 border-t border-gray-700">
+                       <p className="text-[10px] font-bold text-purple-400 uppercase">Foto</p>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Zoom</span><input type="range" min="1" max="3" step="0.1" value={zoom} onChange={e=>setZoom(e.target.value)} className="w-full accent-purple-500" /></div>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Orizz</span><input type="range" min="0" max="100" value={posX} onChange={e=>setPosX(e.target.value)} className="w-full accent-purple-500" /></div>
+                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Vert</span><input type="range" min="0" max="100" value={posY} onChange={e=>setPosY(e.target.value)} className="w-full accent-purple-500" /></div>
+                     </div>
+                  </div>
+              )}
+
+              <div className="relative w-full rounded-xl overflow-hidden shadow-2xl bg-black border border-gray-600 mt-4" style={{ aspectRatio: '63/88' }}>
+                  <img src={card.image} className="absolute inset-0 w-full h-full pointer-events-none" />
+                  {customImg && (
+                    <div className="absolute bg-black z-10 overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] border border-black/50" style={{ top: `${maskTop}%`, left: `${maskLeft}%`, width: `${maskWidth}%`, height: `${maskHeight}%` }}>
+                      <img src={customImg} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${posX - 50}%, ${posY - 50}%) scale(${zoom})` }} />
+                    </div>
+                  )}
+                  {customName && (
+                    <div className="absolute z-20 flex items-center px-3" style={{ top: '4.8%', left: '7.5%', width: '65%', height: '4.5%' }}>
+                      <span className="text-white tracking-wider truncate" style={{ fontFamily: "Georgia, serif", fontSize: '16px', fontWeight: '900', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{customName}</span>
+                    </div>
+                  )}
+              </div>
+
+              <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
+                  {isGenerating ? 'Attendere...' : '💾 Applica Proxy al Mazzo'}
+              </button>
+           </div>
+        </div>
+      );
+    };
+
+    // --- I MIEI MAZZI, ANALISI, PROXY LAIR RIMANGONO INVARIATI NELLA LOGICA (GIA' PERFETTI) ---
+    // (Ometto i commenti ripetitivi, ma i componenti sono tutti inclusi qui sotto per funzionare)
+    
+    const MyDecks = ({navigate}) => {
+      const [decks, setDecks] = useState([]);
+      useEffect(() => { setDecks(JSON.parse(localStorage.getItem('mtg_decks') || '[]')); }, []);
+
+      const deleteDeck = (id) => {
+        if(confirm("Eliminare definitivamente?")) {
+          const newD = decks.filter(d => d.id !== id);
+          localStorage.setItem('mtg_decks', JSON.stringify(newD));
+          setDecks(newD);
+        }
+      };
+
+      if (decks.length === 0) return <div className="text-center text-gray-400 mt-10 font-bold bg-gray-900/80 p-6 rounded-xl border border-gray-700 backdrop-blur-sm mx-4">Nessun mazzo salvato. Vai nel Deckbuilder!</div>;
+
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          {decks.map(d => {
+            const cmds = d.cards.filter(c => c.isCommander);
+            let mainImg = '';
+            if (cmds.length > 0 && cmds[0]) mainImg = cmds[0].proxyImage || cmds[0].image;
+            else if (d.cards[0]) mainImg = d.cards[0].proxyImage || d.cards[0].image;
+
+            return (
+              <div key={d.id} className="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-600 overflow-hidden shadow-xl flex flex-col">
+                 <div className="h-32 bg-gray-900 relative">
+                   <img src={mainImg} className="w-full h-full object-cover object-top opacity-60" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
+                   <h3 className="absolute bottom-2 left-4 text-2xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">{d.name}</h3>
+                   <span className="absolute top-2 right-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow uppercase">{d.format || 'Commander'}</span>
+                 </div>
+                 <div className="p-3 bg-gray-900 grid grid-cols-2 gap-2 text-sm font-bold">
+                   <button onClick={() => navigate('analysis', d)} className="col-span-2 bg-blue-600 hover:bg-blue-500 text-white rounded py-3 shadow text-base">📊 Analisi & Master IA</button>
+                   <button onClick={() => navigate('deckbuilder', d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow">Modifica</button>
+                   <button onClick={() => navigate('printview', d)} className="bg-purple-600 hover:bg-purple-500 text-white rounded py-2 shadow">Stampa PDF</button>
+                   <button onClick={() => deleteDeck(d.id)} className="col-span-2 bg-red-800 hover:bg-red-700 text-white rounded py-2 mt-1 shadow border border-red-600">Elimina Mazzo</button>
+                 </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+    const DeckAnalysis = ({deck, navigate}) => {
+      if(!deck) return null;
+
+      const cmds = deck.cards.filter(c => c.isCommander);
+      const cmdName = cmds.length > 0 ? cmds[0].name : "Nessun Comandante Selezionato";
+      
+      const totalCards = deck.cards.length;
+      const lands = deck.cards.filter(c => c.type && c.type.toLowerCase().includes('land')).length;
+      const avgCMC = deck.cards.reduce((acc, c) => acc + (c.cmc || 0), 0) / (totalCards || 1);
+
+      const curve = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, '6+':0};
+      let maxCurve = 0;
+      const colorCounts = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 };
+      
+      deck.cards.forEach(c => {
+         if(c.type && !c.type.toLowerCase().includes('land')) {
+            let cmc = c.cmc || 0;
+            if (cmc >= 6) curve['6+']++; else curve[cmc]++;
+         }
+         if (c.colors && c.colors.length > 0) {
+            c.colors.forEach(col => { if(colorCounts[col] !== undefined) colorCounts[col]++; });
+         } else if (c.type && !c.type.toLowerCase().includes('land')) {
+            colorCounts['C']++;
+         }
+      });
+      Object.values(curve).forEach(v => { if(v > maxCurve) maxCurve = v; });
+      let maxColor = 0;
+      Object.values(colorCounts).forEach(v => { if(v > maxColor) maxColor = v; });
+
+      const formatEdhrec = (name) => name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
+      const openEdhrec = () => {
+         if (cmds.length === 0) return alert("Questo mazzo non ha un Comandante salvato!");
+         window.open(`https://edhrec.com/commanders/${formatEdhrec(cmds[0].name)}`, '_blank');
+      };
+
+      const copyPrompt = () => {
+         const list = deck.cards.map(c => `1 ${c.name}`).join('\n');
+         const prompt = `Agisci come un Master professionista e Deckbuilder esperto di Magic: The Gathering.
+Formato del mazzo: ${deck.format || 'Commander'}. ${deck.format==='commander'? `Il comandante è: ${cmdName}.`:''}
+Analizza la curva di mana, controlla la banlist e dammi consigli su cosa togliere e aggiungere per potenziarlo.
+Lista:
+${list}`;
+         navigator.clipboard.writeText(prompt);
+         alert("Prompt copiato! Incollalo su ChatGPT o Gemini.");
+      };
+
+      const copyList = () => {
+         const list = deck.cards.map(c => `1 ${c.name}`).join('\n');
+         navigator.clipboard.writeText(list);
+         alert("Lista carte copiata!");
+      };
+
+      return (
+         <div className="max-w-2xl mx-auto space-y-4">
+           <button onClick={() => navigate('mydecks')} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded font-bold mb-2 shadow">⬅ Indietro ai Mazzi</button>
+           
+           <div className="bg-gray-800/90 p-6 rounded-xl border border-gray-600 shadow-xl backdrop-blur-sm">
+             <h2 className="text-3xl font-black text-white mb-1 drop-shadow-md">{deck.name}</h2>
+             <p className="text-gray-300 font-bold mb-6">Formato: <span className="text-blue-400 uppercase">{deck.format || 'Commander'}</span></p>
+
+             <div className="grid grid-cols-3 gap-2 mb-6 text-center">
+               <div className="bg-gray-900 p-2 rounded-lg border border-gray-700 shadow-inner">
+                  <p className="text-xs text-gray-400 font-bold uppercase">Carte</p>
+                  <p className={`text-2xl font-black text-white`}>{totalCards}</p>
+               </div>
+               <div className="bg-gray-900 p-2 rounded-lg border border-gray-700 shadow-inner">
+                  <p className="text-xs text-gray-400 font-bold uppercase">Terre</p>
+                  <p className="text-2xl font-black text-white">{lands}</p>
+               </div>
+               <div className="bg-gray-900 p-2 rounded-lg border border-gray-700 shadow-inner">
+                  <p className="text-xs text-gray-400 font-bold uppercase">CMC</p>
+                  <p className="text-2xl font-black text-blue-400">{avgCMC.toFixed(2)}</p>
+               </div>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+               <div className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-inner">
+                 <h3 className="text-sm font-bold text-blue-400 mb-4 text-center uppercase">Curva Mana (No Terre)</h3>
+                 <div className="flex items-end gap-2 h-28">
+                    {Object.keys(curve).map(k => {
+                       const hPerc = maxCurve === 0 ? 0 : (curve[k] / maxCurve) * 100;
+                       return (
+                         <div key={k} className="flex-1 flex flex-col items-center justify-end h-full">
+                           <span className="text-[10px] text-gray-300 font-bold mb-1">{curve[k]}</span>
+                           <div className="w-full bg-gradient-to-t from-blue-700 to-blue-400 rounded-t-sm" style={{ height: `${hPerc}%` }}></div>
+                           <span className="text-[10px] text-gray-400 mt-1 font-bold">{k}</span>
+                         </div>
+                       );
+                    })}
+                 </div>
+               </div>
+
+               <div className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-inner">
+                 <h3 className="text-sm font-bold text-purple-400 mb-4 text-center uppercase">Devozione Colori</h3>
+                 <div className="flex items-end gap-2 h-28">
+                    {ManaColors.map(m => {
+                       const count = colorCounts[m.id];
+                       const hPerc = maxColor === 0 ? 0 : (count / maxColor) * 100;
+                       let barColor = "bg-gray-500";
+                       if(m.id==='W') barColor="bg-yellow-100"; if(m.id==='U') barColor="bg-blue-500";
+                       if(m.id==='B') barColor="bg-gray-600"; if(m.id==='R') barColor="bg-red-500";
+                       if(m.id==='G') barColor="bg-green-500"; if(m.id==='C') barColor="bg-gray-400";
+                       
+                       return (
+                         <div key={m.id} className="flex-1 flex flex-col items-center justify-end h-full">
+                           <span className="text-[10px] text-gray-300 font-bold mb-1">{count}</span>
+                           <div className={`w-full ${barColor} rounded-t-sm shadow`} style={{ height: `${hPerc}%` }}></div>
+                           <span className={`text-[10px] mt-1 font-black ${m.color.split(' ')[1]}`}>{m.label}</span>
+                         </div>
+                       );
+                    })}
+                 </div>
+               </div>
+             </div>
+
+             <div className="space-y-3">
+               {deck.format === 'commander' && (
+                 <button onClick={openEdhrec} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all">
+                   🛡️ Sinergie su EDHREC
+                 </button>
+               )}
+               <button onClick={copyPrompt} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all">
+                 🤖 Copia Prompt IA (Gemini/ChatGPT)
+               </button>
+               <button onClick={copyList} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow border border-gray-600 flex items-center justify-center gap-2 mt-2">
+                 📋 Copia solo Lista
+               </button>
+             </div>
+           </div>
+         </div>
+      );
+    };
+
+    const PrintView = ({deck, navigate}) => {
+      if(!deck) return null;
+      return (
+        <div className="print-container w-full h-full bg-white text-black p-4 absolute top-0 left-0 z-50">
+          <div className="no-print mb-4 p-4 bg-gray-100 rounded border border-gray-300 flex justify-between items-center shadow-md">
+            <p className="font-bold text-gray-800 text-sm">Usa "Stampa -> Salva come PDF".<br/>(Carte formattate a 63x88mm).</p>
+            <div className="space-x-2 flex">
+              <button onClick={() => navigate('mydecks')} className="px-4 py-2 bg-gray-500 text-white rounded font-bold">Indietro</button>
+              <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white font-bold rounded">Stampa PDF</button>
+            </div>
+          </div>
+          <div className="print-grid">
+            {deck.cards.map((c, i) => <img key={i} src={c.proxyImage || c.image} className="print-card shadow-sm border border-gray-300" />)}
+          </div>
+        </div>
+      );
+    };
+
+    const ProxyCreatorLair = () => {
+      // Usa la stessa logica identica dell'inline editor per risparmiare codice, senza restituirla al mazzo
+      return (
+         <div className="max-w-md mx-auto">
+            <ProxyInlineEditor card={null} onClose={()=>null} onSave={() => {}} isStandalone={true} />
+         </div>
+      );
+    };
+
+    // Unico componente Proxy per Lair e per Deck
+    const ProxyInlineEditor = ({card, onClose, onSave, isStandalone}) => {
+      const [baseQuery, setBaseQuery] = useState("");
+      const [baseCard, setBaseCard] = useState(card ? {name: card.name, img: card.image, type: card.type, cmc: card.cmc} : null);
+      
+      const [customName, setCustomName] = useState("");
+      const [customImg, setCustomImg] = useState("");
+      const [zoom, setZoom] = useState(1);
+      const [posX, setPosX] = useState(50); const [posY, setPosY] = useState(50);
+      const [maskTop, setMaskTop] = useState(11.5); const [maskHeight, setMaskHeight] = useState(44); 
+      const [maskLeft, setMaskLeft] = useState(8.2); const [maskWidth, setMaskWidth] = useState(83.6);
+      const [isGenerating, setIsGenerating] = useState(false);
+
+      const searchBase = () => {
+        fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(baseQuery)}`)
+          .then(res => res.json())
+          .then(c => {
+             if(c.id) {
+               let imgUrl = c.image_uris ? c.image_uris.normal : (c.card_faces ? c.card_faces[0].image_uris.normal : null);
+               setBaseCard({ name: c.name, type: c.type_line, img: imgUrl, cmc: c.cmc });
+               setCustomName(""); setCustomImg(""); setZoom(1); setPosX(50); setPosY(50);
+               setMaskTop(11.5); setMaskHeight(44); setMaskLeft(8.2); setMaskWidth(83.6);
+             } else alert("Carta non trovata");
+          });
+      };
+
+      const handleImage = (e) => {
+        const file = e.target.files[0];
+        if(file) { const r = new FileReader(); r.onload = (ev) => setCustomImg(ev.target.result); r.readAsDataURL(file); }
+      };
+
+      const eseguiSalvataggio = () => {
+        if(!baseCard || !customImg) return alert("Carica un'immagine!");
+        setIsGenerating(true);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const bImg = new Image();
+        bImg.crossOrigin = "anonymous"; bImg.src = baseCard.img;
+
+        bImg.onload = () => {
+          canvas.width = bImg.width; canvas.height = bImg.height; 
+          ctx.drawImage(bImg, 0, 0, canvas.width, canvas.height);
+
+          const uImg = new Image(); uImg.src = customImg;
+          uImg.onload = () => {
+             const artX = canvas.width * (maskLeft / 100); const artW = canvas.width * (maskWidth / 100);
+             const artY = canvas.height * (maskTop / 100); const artH = canvas.height * (maskHeight / 100);
+
+             ctx.save(); ctx.beginPath(); ctx.rect(artX, artY, artW, artH); ctx.clip(); 
+
+             const boxAspect = artW / artH; const imgAspect = uImg.width / uImg.height;
+             let baseW, baseH;
+             if (imgAspect > boxAspect) { baseH = artH; baseW = uImg.width * (artH / uImg.height); } 
+             else { baseW = artW; baseH = uImg.height * (artW / uImg.width); }
+             
+             const finalW = baseW * zoom; const finalH = baseH * zoom;
+             const offsetX = finalW * ((posX - 50) / 100); const offsetY = finalH * ((posY - 50) / 100);
+             const imgX = artX + (artW / 2) - (finalW / 2) + offsetX; const imgY = artY + (artH / 2) - (finalH / 2) + offsetY;
+
+             ctx.drawImage(uImg, imgX, imgY, finalW, finalH); ctx.restore();
+
+             if (customName) {
+                const tx = canvas.width * 0.07; const ty = canvas.height * 0.045;
+                const tw = canvas.width * 0.65; const th = canvas.height * 0.055;
+                ctx.fillStyle = "#1a1a1a"; ctx.fillRect(tx, ty, tw, th);
+                ctx.strokeStyle = "#555"; ctx.strokeRect(tx, ty, tw, th);
+                ctx.fillStyle = "white"; ctx.font = `bold ${canvas.height * 0.025}px Georgia, serif`;
+                ctx.fillText(customName, tx + 10, ty + (th/1.8));
+                ctx.fillStyle = "#aaa"; ctx.font = `italic ${canvas.height * 0.015}px Georgia, serif`;
+                ctx.fillText(baseCard.name, tx + 10, ty + (th/1.1));
+             }
+
+             const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+             
+             const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: [], isCommander: false, isCustom: true };
+             let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
+             savedProxies.push(newProxy); localStorage.setItem('mtg_proxies', JSON.stringify(savedProxies));
+             
+             setIsGenerating(false);
+             if(isStandalone) alert("Proxy Salvata nel Database! (Vai nel Deckbuilder per usarla)");
+             else onSave({...card, proxyImage: finalDataUrl, name: customName || card.name, isCustom: true});
+          };
+        };
+      };
+
+      const Content = () => (
+         <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
+              <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+                 <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
+                 {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
+              </div>
+              
+              {isStandalone && (
+                <div className="flex gap-2 mb-4">
+                  <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white" />
+                  <button onClick={searchBase} className="bg-purple-600 px-3 rounded text-white font-bold">Cerca</button>
+                </div>
+              )}
+
+              {baseCard && (
+               <div className="animate-fade space-y-3">
+                 <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold" />
+                 <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow">
+                   📸 Carica Immagine <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
+                 </label>
+
+                 {customImg && (
+                     <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 space-y-3">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice Riquadro</p>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Altezza</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Largh.</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
+                        </div>
+                        <div className="space-y-1 pt-2 border-t border-gray-700">
+                          <p className="text-[10px] font-bold text-purple-400 uppercase">Foto Interna</p>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Zoom</span><input type="range" min="1" max="3" step="0.1" value={zoom} onChange={e=>setZoom(e.target.value)} className="w-full accent-purple-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Orizz</span><input type="range" min="0" max="100" value={posX} onChange={e=>setPosX(e.target.value)} className="w-full accent-purple-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Vert</span><input type="range" min="0" max="100" value={posY} onChange={e=>setPosY(e.target.value)} className="w-full accent-purple-500" /></div>
+                        </div>
+                     </div>
+                 )}
+
+                 <div className="relative w-full rounded-xl overflow-hidden shadow-2xl bg-black border border-gray-600 mt-4" style={{ aspectRatio: '63/88' }}>
+                     <img src={baseCard.img} className="absolute inset-0 w-full h-full pointer-events-none" />
+                     {customImg && (
+                       <div className="absolute bg-black z-10 overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] border border-black/50" style={{ top: `${maskTop}%`, left: `${maskLeft}%`, width: `${maskWidth}%`, height: `${maskHeight}%` }}>
+                         <img src={customImg} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${posX - 50}%, ${posY - 50}%) scale(${zoom})` }} />
+                       </div>
+                     )}
+                     {customName && (
+                       <div className="absolute z-20 flex items-center px-3" style={{ top: '4.8%', left: '7.5%', width: '65%', height: '4.5%' }}>
+                         <span className="text-white tracking-wider truncate" style={{ fontFamily: "Georgia, serif", fontSize: '16px', fontWeight: '900', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{customName}</span>
+                       </div>
+                     )}
+                 </div>
+
+                 <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
+                     {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva' : '💾 Applica Proxy al Mazzo')}
+                 </button>
+               </div>
+              )}
+           </div>
+      );
+
+      if (isStandalone) return <Content />;
+      return (
+        <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-start pt-6 px-2 overflow-y-auto pb-10 animate-fade">
+           <Content />
+        </div>
+      );
+    };
+
+    // --- GAME UTILITY (CON MANA TRACKER) ---
+    const GameUtility = ({view, setView}) => {
+      const [setup, setSetup] = useState(true);
+      const [numPlayers, setNumPlayers] = useState(4);
+      const [startLife, setStartLife] = useState(40);
+      const [players, setPlayers] = useState([]);
+
+      const startGame = () => {
+        let newPlayers = [];
+        for(let i=1; i<=numPlayers; i++) {
+          let cmdDmg = {};
+          for(let j=1; j<=numPlayers; j++) { if(i!==j) cmdDmg[`P${j}`] = 0; }
+          newPlayers.push({ id: `P${i}`, name: `Player ${i}`, life: startLife, poison: 0, cmdCasts: 0, emblems: 0, immune: false, cmdDmg: cmdDmg, bgUrl: null, mana: {W:0, U:0, B:0, R:0, G:0, C:0} });
+        }
+        setPlayers(newPlayers);
+        setView('game_active');
+      };
+
+      const updateStat = (playerId, stat, amount, opponentId = null) => {
+        setPlayers(prev => prev.map(p => {
+          if (p.id !== playerId) return p;
+          if (opponentId) {
+             let newDmg = { ...p.cmdDmg };
+             newDmg[opponentId] = Math.max(0, newDmg[opponentId] + amount);
+             return { ...p, cmdDmg: newDmg };
+          }
+          return { ...p, [stat]: Math.max(0, p[stat] + amount) };
+        }));
+      };
+
+      const updateMana = (playerId, color, amount) => {
+        setPlayers(prev => prev.map(p => {
+           if(p.id !== playerId) return p;
+           let newMana = {...p.mana};
+           newMana[color] = Math.max(0, newMana[color] + amount);
+           return {...p, mana: newMana};
+        }));
+      }
+
+      const updatePlayerConfig = (id, key, val) => { setPlayers(prev => prev.map(p => p.id === id ? { ...p, [key]: val } : p)); };
+      const toggleImmunity = (playerId) => { setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, immune: !p.immune } : p)); };
+
+      if (view === 'game') return (
+        <div className="max-w-md mx-auto bg-gray-800/90 p-6 rounded-xl shadow-lg border border-gray-600 mt-4 backdrop-blur-sm">
+          <h2 className="text-3xl font-black mb-6 text-center text-red-500 drop-shadow-md">Setup Partita</h2>
+          <p className="text-xs text-center text-gray-300 font-bold mb-4 bg-gray-900 p-2 rounded border border-gray-700">📱 Gira il telefono in orizzontale prima di iniziare per attivare la modalità Schermo Intero!</p>
+          <div className="mb-4">
+            <label className="block text-gray-300 font-bold mb-2">Numero Giocatori (1-6)</label>
+            <input type="number" min="1" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center text-xl font-bold" />
+          </div>
+          <div className="mb-6">
+            <label className="block text-gray-300 font-bold mb-2">Punti Vita Iniziali</label>
+            <select value={startLife} onChange={e => setStartLife(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center text-xl font-bold">
+              <option value={40}>40 (Commander)</option>
+              <option value={20}>20 (Standard)</option>
+            </select>
+          </div>
+          <button onClick={startGame} className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl text-xl shadow-[0_0_15px_rgba(220,38,38,0.5)]">INIZIA</button>
+        </div>
+      );
+
+      const gridClass = players.length <= 2 ? 'grid-cols-2 grid-rows-1' : (players.length <= 4 ? 'grid-cols-2 grid-rows-2' : 'grid-cols-3 grid-rows-2');
+
+      return (
+        <div className="fixed inset-0 z-[100] bg-black p-1 flex flex-col h-[100dvh] w-[100dvw]">
+          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci</button>
+          
+          <div className={`flex-1 grid ${gridClass} gap-1 h-full w-full pt-12`}>
+             {players.map(p => <PlayerCard key={p.id} player={p} updateStat={updateStat} updateMana={updateMana} toggleImmunity={toggleImmunity} opponents={players.filter(op => op.id !== p.id)} updatePlayerConfig={updatePlayerConfig} />)}
+          </div>
+        </div>
+      );
+    };
+
+    const PlayerCard = ({ player, updateStat, updateMana, toggleImmunity, opponents, updatePlayerConfig }) => {
+      const [viewMode, setViewMode] = useState('life'); // 'life', 'stats', 'mana'
+      const [cmdQuery, setCmdQuery] = useState("");
+      
+      let isDead = false;
+      if (!player.immune) {
+         if (player.life <= 0) isDead = true;
+         if (player.poison >= 10) isDead = true;
+         Object.keys(player.cmdDmg).forEach(key => { if (player.cmdDmg[key] >= 21) isDead = true; });
+      }
+
+      const searchCmdBg = () => {
+         if(!cmdQuery) return;
+         fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cmdQuery)}`)
+            .then(res => res.json())
+            .then(c => {
+               if(c.id) {
+                 let imgUrl = c.image_uris ? c.image_uris.art_crop : (c.card_faces ? c.card_faces[0].image_uris.art_crop : null);
+                 if(imgUrl) updatePlayerConfig(player.id, 'bgUrl', imgUrl);
+                 setCmdQuery("");
+               } else alert("Comandante non trovato");
+            }).catch(e => console.error(e));
+      };
+
+      if (viewMode === 'stats') {
+        return (
+          <div className="w-full h-full flex flex-col rounded-xl border-2 border-blue-600 bg-gray-900 overflow-hidden shadow-2xl p-2 relative">
+            <div className="flex justify-between items-center border-b border-gray-700 pb-1 mb-1">
+              <span className="font-bold text-xs text-blue-400">Stats: {player.name}</span>
+              <button onClick={() => setViewMode('life')} className="px-2 py-1 bg-blue-600 rounded text-white shadow-lg text-xs font-bold">Chiudi</button>
+            </div>
+            
+            <div className="overflow-y-auto space-y-1 pb-1 text-xs flex-1 pr-1">
+              <div className="bg-gray-800 p-1 rounded-lg border border-gray-700">
+                <p className="text-[10px] text-blue-300 font-bold mb-1 uppercase">🖼️ Sfondo Comandante</p>
+                <div className="flex gap-1">
+                  <input type="text" placeholder="Nome in Inglese..." value={cmdQuery} onChange={e=>setCmdQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 text-white text-xs py-1" />
+                  <button onClick={searchCmdBg} className="bg-blue-600 px-2 rounded text-white font-bold text-xs">OK</button>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 p-1 rounded-lg border border-gray-700">
+                <p className="text-[10px] text-red-400 font-bold mb-1 uppercase text-center">⚔️ Danni Cmd Da:</p>
+                {opponents.map(opp => (
+                   <StatRow key={opp.id} label={opp.name} value={player.cmdDmg[opp.id]} onSub={() => updateStat(player.id, 'cmdDmg', -1, opp.id)} onAdd={() => updateStat(player.id, 'cmdDmg', 1, opp.id)} />
+                ))}
+              </div>
+
+              <div className="space-y-1 bg-gray-800 p-1 rounded-lg border border-gray-700">
+                <StatRow label="💧 Veleno" value={player.poison} onSub={() => updateStat(player.id, 'poison', -1)} onAdd={() => updateStat(player.id, 'poison', 1)} />
+                <StatRow label="⚔️ Lanci Cmd" value={player.cmdCasts} onSub={() => updateStat(player.id, 'cmdCasts', -1)} onAdd={() => updateStat(player.id, 'cmdCasts', 1)} />
+                <StatRow label="🛡️ Emblemi" value={player.emblems} onSub={() => updateStat(player.id, 'emblems', -1)} onAdd={() => updateStat(player.id, 'emblems', 1)} />
+              </div>
+            </div>
+            
+            <button onClick={() => toggleImmunity(player.id)} className={`w-full py-1 mt-1 text-[10px] font-bold rounded-lg shadow-md transition-colors ${player.immune ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-600'}`}>
+              {player.immune ? '🛡️ Immunità Attiva' : 'Attiva Immunità'}
+            </button>
+          </div>
+        );
+      }
+
+      if (viewMode === 'mana') {
+         return (
+          <div className="w-full h-full flex flex-col rounded-xl border-2 border-emerald-500 bg-gray-900 overflow-hidden shadow-2xl p-2 relative">
+            <div className="flex justify-between items-center border-b border-gray-700 pb-1 mb-1">
+              <span className="font-bold text-xs text-emerald-400">Mana Pool: {player.name}</span>
+              <button onClick={() => setViewMode('life')} className="px-2 py-1 bg-emerald-600 rounded text-white shadow-lg text-xs font-bold">Chiudi</button>
+            </div>
+            <div className="flex-1 grid grid-cols-2 gap-1 overflow-y-auto">
+               {ManaColors.map(m => (
+                  <div key={m.id} className="bg-gray-800 rounded border border-gray-700 flex flex-col items-center justify-center p-1">
+                     <span className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-[10px] border shadow-sm ${m.color}`}>{m.label}</span>
+                     <div className="flex w-full justify-between items-center mt-1 px-1">
+                        <button onClick={() => updateMana(player.id, m.id, -1)} className="w-6 h-6 bg-red-900/80 text-red-300 font-bold rounded">-</button>
+                        <span className="text-lg font-black text-white">{player.mana[m.id]}</span>
+                        <button onClick={() => updateMana(player.id, m.id, 1)} className="w-6 h-6 bg-green-900/80 text-green-300 font-bold rounded">+</button>
+                     </div>
+                  </div>
+               ))}
+            </div>
+            <button onClick={() => { ManaColors.forEach(m => updatePlayerConfig(player.id, 'mana', {W:0,U:0,B:0,R:0,G:0,C:0})) }} className="w-full py-1 mt-1 text-[10px] font-bold rounded-lg shadow-md bg-gray-700 text-white">🔄 Svuota Mana Pool</button>
+          </div>
+         );
+      }
+
+      // VISTA VITA (FRONT)
+      return (
+        <div className={`w-full h-full flex flex-col rounded-xl border-2 relative ${isDead ? 'border-red-600 bg-red-950/90' : 'border-gray-600 bg-gray-900/90'} overflow-hidden shadow-2xl`}>
+          {player.bgUrl && <img src={player.bgUrl} className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-luminosity pointer-events-none" />}
+          {isDead && <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-40 pointer-events-none z-20">💀</div>}
+          {player.immune && <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-30 pointer-events-none text-blue-500 drop-shadow-lg z-20">🛡️</div>}
+          
+          <div className="flex justify-between items-center bg-black/60 backdrop-blur-sm p-2 z-30 border-b border-gray-700 shadow-sm h-[15%]">
+            <span className="font-bold text-white text-sm drop-shadow-md truncate">{player.name}</span>
+            <div className="flex gap-1">
+               <button onClick={() => setViewMode('mana')} className="px-2 py-1 bg-emerald-700 border border-emerald-500 rounded text-[10px] text-white shadow-lg font-bold">Mana 💧</button>
+               <button onClick={() => setViewMode('stats')} className="px-2 py-1 bg-gray-700 border border-gray-500 rounded text-[10px] text-white shadow-lg font-bold">Stats ⚙️</button>
+            </div>
+          </div>
+          
+          <div className="flex-1 flex items-center justify-between px-1 z-30 h-[85%]">
+            <button onClick={() => updateStat(player.id, 'life', -1)} className="w-12 h-full flex items-center justify-center text-4xl font-bold text-red-500 active:bg-red-500/30 rounded-l transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">-</button>
+            <div className="text-6xl md:text-8xl font-black text-white drop-shadow-[0_4px_6px_rgba(0,0,0,1)]">{player.life}</div>
+            <button onClick={() => updateStat(player.id, 'life', 1)} className="w-12 h-full flex items-center justify-center text-4xl font-bold text-green-500 active:bg-green-500/30 rounded-r transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">+</button>
+          </div>
+        </div>
+      );
+    };
+
+    const StatRow = ({ label, value, onSub, onAdd }) => (
+      <div className="flex justify-between items-center bg-gray-900 rounded px-1 py-1 mt-1 border border-gray-700 shadow-inner">
+        <span className="text-gray-300 font-bold text-[10px] truncate max-w-[50%]">{label}</span>
+        <div className="flex items-center space-x-1">
+          <button onClick={onSub} className="w-6 h-6 bg-red-900/80 rounded font-bold text-red-300">-</button>
+          <span className="w-4 text-center font-bold text-white text-xs">{value}</span>
+          <button onClick={onAdd} className="w-6 h-6 bg-green-900/80 rounded font-bold text-green-300">+</button>
+        </div>
+      </div>
+    );
+
+    // --- DICE ROLLER ---
+    const DiceRoller = () => {
+      const [numPlayers, setNumPlayers] = useState(4);
+      const [results, setResults] = useState([]);
+      const [winnerMessage, setWinnerMessage] = useState("");
+
+      const rollDice = () => {
+        let rolls = []; let max = 0;
+        for(let i=1; i<=numPlayers; i++) {
+          const roll = Math.floor(Math.random() * 20) + 1;
+          rolls.push({ player: `Player ${i}`, roll: roll });
+          if(roll > max) max = roll;
+        }
+        setResults(rolls);
+        const winners = rolls.filter(r => r.roll === max);
+        if(winners.length === 1) setWinnerMessage(`🎉 Inizia: ${winners[0].player}!`);
+        else setWinnerMessage(`Pareggio tra: ${winners.map(w=>w.player).join(', ')}. Ritirate!`);
+      };
+
+      return (
+        <div className="max-w-md mx-auto bg-gray-800/90 p-6 rounded-xl border border-gray-600 mt-10 backdrop-blur-sm shadow-xl">
+          <h2 className="text-3xl font-black mb-6 text-center text-purple-500 drop-shadow-md">Tira il Dado (D20)</h2>
+          <label className="block text-gray-300 font-bold mb-2">Numero Giocatori</label>
+          <input type="number" min="2" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center mb-6 font-bold text-xl" />
+          <button onClick={rollDice} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-4 rounded-xl text-xl mb-6 shadow-[0_0_15px_rgba(147,51,234,0.5)]">TIRA IL DADO</button>
+          {results.length > 0 && (
+            <div className="space-y-2 animate-fade">
+              {results.map((r, i) => (
+                <div key={i} className="flex justify-between p-3 bg-gray-900 rounded border border-gray-700 shadow-inner">
+                  <span className="font-bold text-gray-300 text-lg">{r.player}</span>
+                  <span className={`font-black text-xl ${r.roll === 20 ? 'text-green-400' : (r.roll === 1 ? 'text-red-400' : 'text-white')}`}>{r.roll}</span>
+                </div>
+              ))}
+              <div className="mt-4 p-4 bg-green-900/40 border border-green-500 rounded-lg text-center font-bold text-green-400 text-lg shadow-md">{winnerMessage}</div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // --- JUDGE DESK ---
+    const RulesAI = () => {
+      const [question, setQuestion] = useState("");
+      const searchRuling = () => { if(question) window.open(`https://www.google.com/search?q=MTG+Ruling+${encodeURIComponent(question)}`, '_blank'); };
+
+      return (
+        <div className="max-w-md mx-auto space-y-4">
+          <div className="bg-gray-800/90 p-6 rounded-xl border border-gray-600 mt-4 text-center backdrop-blur-sm shadow-xl">
+            <h2 className="text-3xl font-black mb-4 text-green-500 drop-shadow-md">Judge Desk</h2>
+            <p className="text-sm text-gray-300 mb-6 font-semibold">Cerca il tuo dubbio tra i Ruling Ufficiali o contatta un Arbitro vero.</p>
+            
+            <textarea className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-3 text-white mb-4 font-semibold" placeholder="Scrivi il tuo dubbio sulla combo..." value={question} onChange={(e) => setQuestion(e.target.value)}></textarea>
+            <button onClick={searchRuling} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-lg mb-6 flex justify-center items-center gap-2">🔍 Cerca Ruling Online</button>
+
+            <div className="border-t border-gray-700 pt-6 space-y-3">
+               <a href="https://magic.wizards.com/en/rules" target="_blank" className="block w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow border border-gray-600">📖 PDF Regole Ufficiali</a>
+               <a href="https://chat.magicjudges.org/mtgrules/" target="_blank" className="block w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow border border-blue-500">💬 Chat Live Judge DCI (24/7)</a>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
