@@ -10,15 +10,11 @@
   <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
   <style>
     body { -webkit-font-smoothing: antialiased; overflow-x: hidden; user-select: none; -webkit-touch-callout: none; background-color: #000; }
-    
-    /* FIX CRUCIALE PER LE FINESTRE (Tolto il transform che bloccava le coordinate) */
     .animate-fade { animation: fadeIn 0.2s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes splashFade { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
-    
     button { touch-action: manipulation; }
     
-    /* Nasconde freccette dai campi numero su alcuni browser */
     input[type=number]::-webkit-inner-spin-button, 
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
@@ -225,6 +221,7 @@
              }
 
              const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+             
              const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: card ? card.colors : [], isCommander: false, isCustom: true };
              
              let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
@@ -242,6 +239,11 @@
 
       const editorUI = (
         <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
+          <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+             <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
+             {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
+          </div>
+          
           {isStandalone && (
             <div className="flex gap-2 mb-4">
               <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white" />
@@ -261,7 +263,7 @@
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice Riquadro</p>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
-                      <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Alt.</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
+                      <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Altezza</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Largh.</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
                     </div>
@@ -297,7 +299,7 @@
       );
 
       if (isStandalone) {
-         return <div className="max-w-md mx-auto relative z-20">{editorUI}</div>;
+         return <div className="max-w-md mx-auto pt-4 pb-10 relative z-20">{editorUI}</div>;
       }
       return (
         <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
@@ -472,7 +474,6 @@
          setEditingProxyCard(null);
       };
 
-      // RAGGRUPPAMENTO CARTE
       const groupedDeck = [];
       const deckMap = {};
       deck.forEach(c => {
@@ -486,7 +487,6 @@
          }
       });
 
-      // AGGIORNO LE COPIE IN UN COLPO SOLO (SOLUZIONE AL PROBLEMA DELLE 80 TERRE)
       const applyManageQty = () => {
          const cardKey = managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : "");
          let newDeck = deck.filter(c => (c.name + (c.isCustom ? c.proxyImage : "")) !== cardKey);
@@ -504,7 +504,6 @@
          }));
       };
 
-      // CONTROLLO LEGALITA'
       let warnings = [];
       const commanders = deck.filter(c => c.isCommander);
       const cmdColors = new Set();
@@ -556,7 +555,6 @@
       return (
         <div className="max-w-2xl mx-auto space-y-4 relative z-10">
           
-          {/* MODALE NUOVA PAGINA: AGGIUNGI CARTA (Fix Posizione & Inserimento Testuale) */}
           {selectedCard && (
             <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
                <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
@@ -586,7 +584,6 @@
             </div>
           )}
 
-          {/* MODALE NUOVA PAGINA: GESTIONE COPIE NEL MAZZO */}
           {managingCard && (
             <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
                <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
@@ -688,7 +685,7 @@
 
              <div className="flex gap-2">
                <button onClick={searchCard} className="flex-1 bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
-                 {loading && !nextPage ? <span>Cerco...</span> : <span><Icons.Search /> Cerca</span>}
+                 {loading ? <span>Cerco...</span> : <span className="flex items-center gap-2"><Icons.Search /> Cerca</span>}
                </button>
                <button onClick={loadMyProxies} className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
                  ✨ Mie Proxy
@@ -851,8 +848,8 @@
       const copyPrompt = () => {
          const list = deck.cards.map(c => `1 ${c.name}`).join('\n');
          const prompt = `Agisci come un Master professionista e Deckbuilder esperto di Magic: The Gathering.
-Formato del mazzo: ${deck.format || 'Commander'}. ${deck.format==='commander'? `Il comandante è: ${cmdName}.`:''}
-Analizza la curva di mana, controlla la banlist e dammi consigli su cosa togliere e aggiungere per potenziarlo.
+Formato: ${deck.format || 'Commander'}. ${deck.format==='commander'? `Comandante: ${cmdName}.`:''}
+Analizza curva di mana, banlist e dammi consigli su cosa tagliare e aggiungere.
 Lista:
 ${list}`;
          navigator.clipboard.writeText(prompt);
@@ -990,7 +987,6 @@ ${list}`;
              let prevVal = newDmg[opponentId] || 0;
              newDmg[opponentId] = Math.max(0, prevVal + amount);
              
-             // SCALA LA VITA IN AUTOMATICO (In base alla differenza del danno comandante)
              let diff = newDmg[opponentId] - prevVal;
              return { ...p, cmdDmg: newDmg, life: Math.max(0, p.life - diff) };
           }
@@ -1017,7 +1013,7 @@ ${list}`;
           <p className="text-xs text-center text-gray-300 font-bold mb-4 bg-gray-900 p-2 rounded border border-gray-700">📱 Gira il telefono in orizzontale prima di iniziare per attivare la modalità Schermo Intero!</p>
           <div className="mb-4">
             <label className="block text-gray-300 font-bold mb-2">Numero Giocatori (1-6)</label>
-            <input type="number" min="1" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center text-xl font-bold" />
+            <input type="number" min="1" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center text-xl font-bold outline-none" />
           </div>
           <div className="mb-6">
             <label className="block text-gray-300 font-bold mb-2">Punti Vita Iniziali</label>
@@ -1034,7 +1030,7 @@ ${list}`;
 
       return (
         <div className="fixed inset-0 z-[100] bg-black p-1 flex flex-col h-[100dvh] w-[100dvw]">
-          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci / Setup</button>
+          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci</button>
           <div className={`flex-1 grid ${gridClass} gap-1 h-full w-full pt-12`}>
              {players.map(p => <PlayerCard key={p.id} player={p} updateStat={updateStat} updateMana={updateMana} toggleImmunity={toggleImmunity} opponents={players.filter(op => op.id !== p.id)} updatePlayerConfig={updatePlayerConfig} />)}
           </div>
