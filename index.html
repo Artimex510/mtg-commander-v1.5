@@ -35,8 +35,7 @@
     const Icons = {
       Menu: () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>,
       Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
-      Back: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>,
-      Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      Back: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
     };
 
     const ManaColors = [
@@ -144,7 +143,7 @@
       </button>
     );
 
-    // --- PROXY EDITOR UNIVERSALE ---
+    // --- PROXY EDITOR UNIVERSALE (Adattato a Sub-View) ---
     const ProxyEditor = ({card, onClose, onSave, isStandalone}) => {
       const [baseQuery, setBaseQuery] = useState("");
       const [baseCard, setBaseCard] = useState(card ? {name: card.name, type: card.type, img: card.image, cmc: card.cmc} : null);
@@ -161,16 +160,22 @@
       const [isGenerating, setIsGenerating] = useState(false);
 
       const searchBase = () => {
-        fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(baseQuery)}`)
+        if(!baseQuery.trim()) return;
+        fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(baseQuery.trim())}`)
           .then(res => res.json())
           .then(c => {
-             if(c.id) {
-               let imgUrl = c.image_uris ? c.image_uris.normal : (c.card_faces ? c.card_faces[0].image_uris.normal : null);
-               setBaseCard({ name: c.name, type: c.type_line, img: imgUrl, cmc: c.cmc });
-               setCustomName(""); setCustomImg(""); setZoom(1); setPosX(50); setPosY(50);
-               setMaskTop(11.5); setMaskHeight(44); setMaskLeft(8.2); setMaskWidth(83.6);
-             } else alert("Carta non trovata");
-          }).catch(e => { console.error(e); });
+             try {
+                 if(c.id) {
+                   let imgUrl = "";
+                   if (c.image_uris && c.image_uris.normal) imgUrl = c.image_uris.normal;
+                   else if (c.card_faces && c.card_faces.length > 0 && c.card_faces[0].image_uris) imgUrl = c.card_faces[0].image_uris.normal;
+                   
+                   setBaseCard({ name: c.name || "Sconosciuta", type: c.type_line || "", img: imgUrl, cmc: c.cmc || 0 });
+                   setCustomName(""); setCustomImg(""); setZoom(1); setPosX(50); setPosY(50);
+                   setMaskTop(11.5); setMaskHeight(44); setMaskLeft(8.2); setMaskWidth(83.6);
+                 } else { alert("Carta non trovata"); }
+             } catch(err) { console.error("Errore", err); }
+          }).catch(e => { console.error("Rete", e); });
       };
 
       const handleImage = (e) => {
@@ -221,8 +226,7 @@
              }
 
              const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-             
-             const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: card ? card.colors : [], isCommander: false, isCustom: true };
+             const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: card ? (card.colors || []) : [], isCommander: false, isCustom: true };
              
              let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
              savedProxies.push(newProxy); localStorage.setItem('mtg_proxies', JSON.stringify(savedProxies));
@@ -238,7 +242,7 @@
       };
 
       const editorUI = (
-        <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
+        <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4 mx-auto animate-fade">
           <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
              <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
              {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
@@ -246,15 +250,15 @@
           
           {isStandalone && (
             <div className="flex gap-2 mb-4">
-              <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white" />
-              <button onClick={searchBase} className="bg-purple-600 px-3 rounded text-white font-bold">Cerca</button>
+              <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white outline-none" />
+              <button onClick={searchBase} className="bg-purple-600 hover:bg-purple-500 px-3 rounded text-white font-bold transition-colors">Cerca</button>
             </div>
           )}
 
           {baseCard && (
            <div className="animate-fade space-y-3">
-             <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold" />
-             <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow border border-gray-500">
+             <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold outline-none" />
+             <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow border border-gray-500 transition-colors">
                📸 Carica Immagine <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
              </label>
 
@@ -263,7 +267,7 @@
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice Riquadro</p>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
-                      <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Altezza</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
+                      <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Alt.</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Largh.</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
                     </div>
@@ -290,7 +294,7 @@
                  )}
              </div>
 
-             <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.5)] mt-4 flex justify-center">
+             <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.5)] mt-4 flex justify-center transition-all">
                  {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva Database' : '💾 Applica Proxy al Mazzo')}
              </button>
            </div>
@@ -298,24 +302,10 @@
         </div>
       );
 
-      if (isStandalone) {
-         return <div className="max-w-md mx-auto pt-4 pb-10 relative z-20">{editorUI}</div>;
-      }
-      return (
-        <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
-           <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
-             <button onClick={onClose} className="text-blue-400 font-bold flex items-center gap-1"><Icons.Back /> Indietro</button>
-             <h2 className="text-lg font-bold text-white truncate text-center">Proxy Creator</h2>
-             <div className="w-8"></div>
-           </div>
-           <div className="flex-1 p-4 flex flex-col items-center pb-20">
-              {editorUI}
-           </div>
-        </div>
-      );
+      return editorUI;
     };
 
-    // --- DECKBUILDER ---
+    // --- DECKBUILDER CON NAVIGAZIONE A SUB-PAGINE ---
     const DeckBuilder = ({navigate, activeDeck}) => {
       const [deckName, setDeckName] = useState(activeDeck ? activeDeck.name : "");
       const [deckFormat, setDeckFormat] = useState(activeDeck ? (activeDeck.format || 'commander') : 'commander');
@@ -334,16 +324,32 @@
       const [nextScryfallUrl, setNextScryfallUrl] = useState(null);
       const [loading, setLoading] = useState(false);
       
+      // SUB-VIEWS STATE
       const [selectedCard, setSelectedCard] = useState(null);
       const [addQty, setAddQty] = useState(1); 
       
       const [managingCard, setManagingCard] = useState(null);
       const [manageQty, setManageQty] = useState(0);
 
+      const [editingProxyCard, setEditingProxyCard] = useState(null);
+      
       const [importText, setImportText] = useState("");
       const [showImport, setShowImport] = useState(false);
+      
+      // Salva lo scorrimento quando si apre una sub-page
+      const [savedScroll, setSavedScroll] = useState(0);
 
-      const [editingProxyCard, setEditingProxyCard] = useState(null);
+      const openSubView = (setter, data, qtySetter = null, qtyVal = 1) => {
+         setSavedScroll(window.scrollY);
+         setter(data);
+         if(qtySetter) qtySetter(qtyVal);
+         window.scrollTo(0, 0);
+      };
+
+      const closeSubView = (setter) => {
+         setter(null);
+         setTimeout(() => window.scrollTo(0, savedScroll), 10);
+      };
 
       const toggleMana = (m) => setMana(mana.includes(m) ? mana.filter(x => x !== m) : [...mana, m]);
 
@@ -352,36 +358,28 @@
         fetch(url)
           .then(res => res.json())
           .then(data => {
-            if (data.data) {
-               const cards = data.data.filter(c => c.image_uris || (c.card_faces && c.card_faces[0].image_uris)).map(c => {
-                 let img = null;
-                 if (c.image_uris) img = c.image_uris.normal;
-                 else if (c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
-                 return {
-                   id: c.id, name: c.name, image: img, type: c.type_line, cmc: c.cmc, colors: c.color_identity || [], legalities: c.legalities, isCommander: false
-                 };
-               });
-               
-               if(isNewSearch) {
-                  setAllResults(cards);
-                  setLocalPage(0);
-               } else {
-                  setAllResults(prev => [...prev, ...cards]);
-               }
-               setNextScryfallUrl(data.has_more ? data.next_page : null);
-            } else { 
-               if(isNewSearch) { setAllResults([]); alert("Nessuna carta trovata!"); }
-            }
+            try {
+                if (data.data && Array.isArray(data.data)) {
+                   const cards = data.data.filter(c => c.image_uris || (c.card_faces && c.card_faces.length > 0 && c.card_faces[0].image_uris)).map(c => {
+                     let img = "";
+                     if (c.image_uris && c.image_uris.normal) img = c.image_uris.normal;
+                     else if (c.card_faces && c.card_faces.length > 0 && c.card_faces[0].image_uris && c.card_faces[0].image_uris.normal) img = c.card_faces[0].image_uris.normal;
+                     return { id: c.id || Math.random().toString(), name: c.name || "Sconosciuta", image: img, type: c.type_line || "", cmc: c.cmc || 0, colors: c.color_identity || [], legalities: c.legalities || {}, isCommander: false };
+                   });
+                   if(isNewSearch) { setAllResults(cards); setLocalPage(0); } else { setAllResults(prev => [...prev, ...cards]); }
+                   setNextScryfallUrl(data.has_more ? data.next_page : null);
+                } else { 
+                   if(isNewSearch) { setAllResults([]); alert("Nessuna carta trovata!"); }
+                }
+            } catch (err) { console.error("Errore lettura", err); }
             setLoading(false);
-          })
-          .catch(e => { console.error(e); setLoading(false); });
+          }).catch(e => { console.error("Rete", e); setLoading(false); });
       };
 
       const searchCard = () => {
         let searchQuery = query ? `${query} ` : "";
         if (mana.length > 0) {
-           if (cardType === 'land') searchQuery += `id>=${mana.join('')} `;
-           else searchQuery += `c>=${mana.join('')} `;
+           if (cardType === 'land') searchQuery += `id>=${mana.join('')} `; else searchQuery += `c>=${mana.join('')} `;
         }
         if (cardType) searchQuery += `t:${cardType} `;
         if (subType) searchQuery += `t:${subType} `;
@@ -399,8 +397,8 @@
         setNextScryfallUrl(null);
       };
 
-      const maxLocalPages = Math.ceil(allResults.length / 15);
-      const currentResults = allResults.slice(localPage * 15, (localPage + 1) * 15);
+      const maxLocalPages = allResults.length > 0 ? Math.ceil(allResults.length / 15) : 0;
+      const currentResults = allResults.length > 0 ? allResults.slice(localPage * 15, (localPage + 1) * 15) : [];
 
       const goToNextPage = () => {
          if (localPage + 1 < maxLocalPages) { setLocalPage(localPage + 1); } 
@@ -415,8 +413,7 @@
            newCards.push({...selectedCard, deckId: 'card-' + Date.now() + '-' + i + '-' + Math.random(), isCommander: false});
         }
         setDeck([...deck, ...newCards]);
-        setSelectedCard(null);
-        setAddQty(1);
+        closeSubView(setSelectedCard);
       };
 
       const saveDeck = () => {
@@ -426,7 +423,7 @@
         if(activeDeck) savedDecks = savedDecks.map(d => d.id === activeDeck.id ? newDeckObj : d);
         else savedDecks.push(newDeckObj);
         localStorage.setItem('mtg_decks', JSON.stringify(savedDecks));
-        alert("Mazzo Salvato!");
+        alert("Mazzo Salvato con successo!");
         navigate('mydecks');
       };
 
@@ -435,7 +432,6 @@
         setLoading(true);
         const lines = importText.split('\n');
         let promises = [];
-        
         for (let i = 0; i < lines.length; i++) {
           let line = lines[i].trim();
           if(!line) continue;
@@ -448,13 +444,10 @@
             .then(c => {
                let arr = [];
                for(let j=0; j<qty; j++) {
-                 let img = null;
-                 if (c.image_uris) img = c.image_uris.normal;
-                 else if (c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
-                 arr.push({
-                   id: c.id + '-' + j + Date.now() + Math.random(), deckId: 'import-' + Date.now() + '-' + Math.random() + '-' + j,
-                   name: c.name, image: img, type: c.type_line, cmc: c.cmc, colors: c.color_identity || [], legalities: c.legalities, isCommander: false
-                 });
+                 let img = "";
+                 if (c.image_uris && c.image_uris.normal) img = c.image_uris.normal;
+                 else if (c.card_faces && c.card_faces.length > 0 && c.card_faces[0].image_uris && c.card_faces[0].image_uris.normal) img = c.card_faces[0].image_uris.normal;
+                 arr.push({ id: c.id || Math.random().toString(), deckId: 'import-' + Date.now() + '-' + Math.random() + '-' + j, name: c.name || "Sconosciuta", image: img, type: c.type_line || "", cmc: c.cmc || 0, colors: c.color_identity || [], legalities: c.legalities || {}, isCommander: false });
                }
                return arr;
             }).catch(e => { return []; });
@@ -471,7 +464,7 @@
 
       const saveInlineProxy = (updatedCard) => {
          setDeck(deck.map(c => c.deckId === updatedCard.deckId ? updatedCard : c));
-         setEditingProxyCard(null);
+         closeSubView(setEditingProxyCard);
       };
 
       const groupedDeck = [];
@@ -494,7 +487,7 @@
             newDeck.push({...managingCard, deckId: 'card-' + Date.now() + '-' + i + '-' + Math.random(), isCommander: false});
          }
          setDeck(newDeck);
-         setManagingCard(null);
+         closeSubView(setManagingCard);
       };
 
       const toggleGroupCommander = (cardKey) => {
@@ -512,7 +505,6 @@
       if (!rulebreaker) {
          if (deckFormat === 'commander' && deck.length !== 100) warnings.push(`Commander: il mazzo deve avere 100 carte (ora ${deck.length}).`);
          if ((deckFormat === 'pauper' || deckFormat === 'modern') && deck.length < 60) warnings.push(`${deckFormat.toUpperCase()}: minimo 60 carte (ora ${deck.length}).`);
-
          if (deckFormat === 'commander') {
              if (commanders.length === 0) warnings.push("Commander: Manca il Comandante.");
              if (commanders.length > 0 && commanders.some(c => c.type && !c.type.toLowerCase().includes("legendary") && !c.type.toLowerCase().includes("planeswalker"))) {
@@ -552,31 +544,33 @@
       const totalCMC = deck.reduce((acc, c) => acc + (c.cmc || 0), 0);
       const avgCMC = deck.length > 0 ? (totalCMC / deck.length).toFixed(2) : 0;
 
+      const isSubViewActive = selectedCard || managingCard || editingProxyCard;
+
       return (
-        <div className="max-w-2xl mx-auto space-y-4 relative z-10">
+        <div className="max-w-2xl mx-auto relative z-10 w-full">
           
+          {/* SUB-VIEW: AGGIUNGI CARTA */}
           {selectedCard && (
-            <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
-               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
-                 <button onClick={() => setSelectedCard(null)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
+            <div className="w-full flex flex-col animate-fade pb-10">
+               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-[70px] z-50 shadow-md mb-6">
+                 <button onClick={() => closeSubView(setSelectedCard)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
                  <h2 className="ml-4 font-bold text-white truncate max-w-[50%]">{selectedCard.name}</h2>
                  <div className="w-8"></div>
                </div>
                
-               <div className="flex-1 flex flex-col items-center justify-start p-6 pb-20">
-                 <img src={selectedCard.proxyImage || selectedCard.image} alt={selectedCard.name} className="w-auto max-h-[50vh] object-contain rounded-xl mb-6 shadow-2xl" />
+               <div className="flex-1 flex flex-col items-center justify-start p-2">
+                 <img src={selectedCard.proxyImage || selectedCard.image || "mtg-bg.jpg"} alt={selectedCard.name} className="w-auto max-h-[50vh] object-contain rounded-xl mb-6 shadow-2xl" />
                  
                  <div className="bg-gray-800 rounded-xl w-full max-w-sm p-4 flex flex-col gap-4 shadow-xl border border-gray-600">
                     <div className="flex justify-between items-center bg-gray-900 rounded-lg p-3 border border-gray-700">
                        <span className="text-gray-400 font-bold">Aggiungi Copie:</span>
                        <div className="flex items-center gap-3">
-                          <button onClick={()=>setAddQty(Math.max(1, addQty-1))} className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-2xl text-white shadow">-</button>
-                          <input type="number" inputMode="numeric" min="1" max="999" value={addQty} onChange={e=>setAddQty(parseInt(e.target.value) || 0)} className="w-16 h-12 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl font-black outline-none focus:border-blue-500" />
-                          <button onClick={()=>setAddQty(addQty+1)} className="w-12 h-12 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-2xl text-white shadow">+</button>
+                          <button onClick={()=>setAddQty(Math.max(1, addQty-1))} className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-2xl text-white shadow transition-colors">-</button>
+                          <input type="number" inputMode="numeric" min="1" max="999" value={addQty} onChange={e=>setAddQty(parseInt(e.target.value) || 0)} className="w-16 h-12 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl font-black outline-none focus:border-blue-500 transition-colors" />
+                          <button onClick={()=>setAddQty(addQty+1)} className="w-12 h-12 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-2xl text-white shadow transition-colors">+</button>
                        </div>
                     </div>
-                    
-                    <button onClick={addToDeckMulti} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-lg py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                    <button onClick={addToDeckMulti} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-lg py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">
                       + AGGIUNGI AL MAZZO
                     </button>
                  </div>
@@ -584,28 +578,28 @@
             </div>
           )}
 
+          {/* SUB-VIEW: GESTIONE COPIE NEL MAZZO */}
           {managingCard && (
-            <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
-               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
-                 <button onClick={() => setManagingCard(null)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
+            <div className="w-full flex flex-col animate-fade pb-10">
+               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-[70px] z-50 shadow-md mb-6">
+                 <button onClick={() => closeSubView(setManagingCard)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
                  <h2 className="ml-4 font-bold text-white truncate max-w-[50%]">{managingCard.name}</h2>
                  <div className="w-8"></div>
                </div>
                
-               <div className="flex-1 flex flex-col items-center justify-start p-6 pb-20">
-                 <img src={managingCard.proxyImage || managingCard.image} alt={managingCard.name} className="w-auto max-h-[50vh] object-contain rounded-xl mb-6 shadow-2xl" />
+               <div className="flex-1 flex flex-col items-center justify-start p-2">
+                 <img src={managingCard.proxyImage || managingCard.image || "mtg-bg.jpg"} alt={managingCard.name} className="w-auto max-h-[50vh] object-contain rounded-xl mb-6 shadow-2xl" />
                  
                  <div className="bg-gray-800 rounded-xl w-full max-w-sm p-4 flex flex-col gap-4 shadow-xl border border-gray-600">
                     <div className="flex justify-between items-center bg-gray-900 rounded-lg p-3 border border-gray-700">
                        <span className="text-gray-400 font-bold">Copie Totali:</span>
                        <div className="flex items-center gap-3">
-                          <button onClick={()=>setManageQty(Math.max(0, manageQty-1))} className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-2xl text-white shadow">-</button>
-                          <input type="number" inputMode="numeric" min="0" max="999" value={manageQty} onChange={e=>setManageQty(parseInt(e.target.value) || 0)} className="w-16 h-12 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl font-black outline-none focus:border-blue-500" />
-                          <button onClick={()=>setManageQty(manageQty+1)} className="w-12 h-12 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-2xl text-white shadow">+</button>
+                          <button onClick={()=>setManageQty(Math.max(0, manageQty-1))} className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-2xl text-white shadow transition-colors">-</button>
+                          <input type="number" inputMode="numeric" min="0" max="999" value={manageQty} onChange={e=>setManageQty(parseInt(e.target.value) || 0)} className="w-16 h-12 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl font-black outline-none focus:border-blue-500 transition-colors" />
+                          <button onClick={()=>setManageQty(manageQty+1)} className="w-12 h-12 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-2xl text-white shadow transition-colors">+</button>
                        </div>
                     </div>
-                    
-                    <button onClick={applyManageQty} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-lg py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                    <button onClick={applyManageQty} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-lg py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">
                       CONFERMA MODIFICHE
                     </button>
                  </div>
@@ -613,149 +607,160 @@
             </div>
           )}
 
+          {/* SUB-VIEW: PROXY EDITOR INLINE */}
           {editingProxyCard && (
-             <ProxyEditor card={editingProxyCard} onClose={() => setEditingProxyCard(null)} onSave={saveInlineProxy} isStandalone={false} />
+            <div className="w-full flex flex-col animate-fade pb-10">
+               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-[70px] z-50 shadow-md mb-6">
+                 <button onClick={() => closeSubView(setEditingProxyCard)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
+                 <h2 className="ml-4 font-bold text-white truncate max-w-[50%]">Proxy Editor</h2>
+                 <div className="w-8"></div>
+               </div>
+               <ProxyEditor card={editingProxyCard} onClose={() => closeSubView(setEditingProxyCard)} onSave={saveInlineProxy} isStandalone={false} />
+            </div>
           )}
 
-          <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm mt-4">
-            <input type="text" placeholder="Nome del Mazzo" value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-xl font-bold mb-4" />
-            
-            <div className="flex justify-between items-center bg-gray-900 p-2 rounded border border-gray-700 mb-3">
-              <span className="text-gray-400 text-sm font-bold ml-2">Formato:</span>
-              <select value={deckFormat} onChange={e => setDeckFormat(e.target.value)} className="bg-gray-800 text-white p-2 rounded font-bold border border-gray-600 outline-none">
-                 <option value="commander">Commander</option>
-                 <option value="pauper">Pauper</option>
-                 <option value="modern">Modern</option>
-              </select>
-            </div>
+          {/* LISTA DECKBUILDER (Nascosta se una Sub-View è attiva) */}
+          <div className={isSubViewActive ? "hidden" : "space-y-4"}>
+              <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm mt-4">
+                <input type="text" placeholder="Nome del Mazzo" value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-xl font-bold mb-4 outline-none" />
+                
+                <div className="flex justify-between items-center bg-gray-900 p-2 rounded border border-gray-700 mb-3">
+                  <span className="text-gray-400 text-sm font-bold ml-2">Formato:</span>
+                  <select value={deckFormat} onChange={e => setDeckFormat(e.target.value)} className="bg-gray-800 text-white p-2 rounded font-bold border border-gray-600 outline-none">
+                     <option value="commander">Commander</option>
+                     <option value="pauper">Pauper</option>
+                     <option value="modern">Modern</option>
+                  </select>
+                </div>
 
-            <div className="flex justify-between items-center text-sm mb-2">
-              <span className={`px-2 py-1 rounded font-bold ${(deckFormat === 'commander' && deck.length === 100) || (deckFormat !== 'commander' && deck.length >= 60) ? 'bg-green-600' : 'bg-red-600'}`}>{deck.length} Carte</span>
-              <span className="bg-blue-600 px-2 py-1 rounded font-bold">Avg CMC: {avgCMC}</span>
-            </div>
-            
-            {!rulebreaker && warnings.length > 0 && (
-               <div className="bg-red-900/80 border border-red-500 rounded p-3 mt-3 shadow-inner">
-                  <p className="text-red-300 font-bold text-[10px] mb-1 uppercase tracking-wide">⚠️ Controllo Legalità {deckFormat.toUpperCase()}:</p>
-                  <ul className="text-[11px] text-white list-disc list-inside space-y-1 font-semibold pl-1">
-                     {warnings.map((w,i) => <li key={i}>{w}</li>)}
-                  </ul>
-               </div>
-            )}
-            <label className="flex items-center gap-2 text-sm text-yellow-500 font-bold bg-yellow-900/30 p-2 rounded border border-yellow-700 cursor-pointer justify-center mt-3">
-              <input type="checkbox" checked={rulebreaker} onChange={e => setRulebreaker(e.target.checked)} className="accent-yellow-500 w-4 h-4" />
-              Attiva "Rulebreaker" (Ignora restrizioni)
-            </label>
-          </div>
+                <div className="flex justify-between items-center text-sm mb-2">
+                  <span className={`px-2 py-1 rounded font-bold ${(deckFormat === 'commander' && deck.length === 100) || (deckFormat !== 'commander' && deck.length >= 60) ? 'bg-green-600' : 'bg-red-600'}`}>{deck.length} Carte</span>
+                  <span className="bg-blue-600 px-2 py-1 rounded font-bold">Avg CMC: {avgCMC}</span>
+                </div>
+                
+                {!rulebreaker && warnings.length > 0 && (
+                   <div className="bg-red-900/80 border border-red-500 rounded p-3 mt-3 shadow-inner">
+                      <p className="text-red-300 font-bold text-[10px] mb-1 uppercase tracking-wide">⚠️ Controllo Legalità {deckFormat.toUpperCase()}:</p>
+                      <ul className="text-[11px] text-white list-disc list-inside space-y-1 font-semibold pl-1">
+                         {warnings.map((w,i) => <li key={i}>{w}</li>)}
+                      </ul>
+                   </div>
+                )}
+                <label className="flex items-center gap-2 text-sm text-yellow-500 font-bold bg-yellow-900/30 p-2 rounded border border-yellow-700 cursor-pointer justify-center mt-3">
+                  <input type="checkbox" checked={rulebreaker} onChange={e => setRulebreaker(e.target.checked)} className="accent-yellow-500 w-4 h-4" />
+                  Attiva "Rulebreaker" (Ignora restrizioni)
+                </label>
+              </div>
 
-          <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
-             <h3 className="font-bold text-blue-400 mb-2 border-b border-gray-700 pb-1">Ricerca Carte</h3>
-             <p className="text-[10px] text-gray-400 mb-3 text-center uppercase tracking-wider font-bold">🇺🇸 Cerca in Inglese (es. "Plains", "Angel")</p>
-             
-             <div className="flex gap-2 mb-3">
-               <input type="text" placeholder="Nome della carta..." value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white outline-none" />
-             </div>
-             
-             <div className="flex gap-2 mb-3 overflow-x-auto pb-1 justify-center">
-               {ManaColors.map(m => (
-                 <button key={m.id} onClick={() => toggleMana(m.id)} className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold border-2 ${mana.includes(m.id) ? 'border-white scale-110' : 'border-transparent opacity-50'} ${m.color}`}>{m.label}</button>
-               ))}
-             </div>
-
-             <div className="grid grid-cols-2 gap-2 mb-4">
-               <select value={cardType} onChange={e => setCardType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm outline-none">
-                 <option value="">Tipo...</option>
-                 <option value="creature">Creatura</option>
-                 <option value="artifact">Artefatto</option>
-                 <option value="enchantment">Incantesimo</option>
-                 <option value="instant">Istantaneo</option>
-                 <option value="sorcery">Stregoneria</option>
-                 <option value="land">Terra</option>
-               </select>
-               <input type="text" placeholder="Sottotipo (es. Goblin)" value={subType} onChange={e => setSubType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm outline-none" />
-             </div>
-
-             <div className="flex gap-2 mb-4">
-               <span className="text-gray-300 text-sm py-2 font-bold">Costo:</span>
-               <select value={cmcOp} onChange={e => setCmcOp(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold outline-none">
-                 <option value="=">=</option><option value=">">&gt;</option><option value="<">&lt;</option>
-               </select>
-               <input type="number" inputMode="numeric" min="0" value={cmcVal} onChange={e => setCmcVal(e.target.value)} className="w-16 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold text-center outline-none" />
-             </div>
-
-             <div className="flex gap-2">
-               <button onClick={searchCard} className="flex-1 bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
-                 {loading ? <span>Cerco...</span> : <span className="flex items-center gap-2"><Icons.Search /> Cerca</span>}
-               </button>
-               <button onClick={loadMyProxies} className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
-                 ✨ Mie Proxy
-               </button>
-             </div>
-             
-             <button onClick={() => setShowImport(!showImport)} className="text-sm text-blue-400 hover:text-blue-300 underline mt-4 block text-center w-full">📥 Importa da Testo</button>
-             {showImport && (
-               <div className="mt-2">
-                 <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="1 Sol Ring&#10;1 Command Tower" className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm mb-2 outline-none"></textarea>
-                 <button onClick={handleImport} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold">{loading ? 'Importo...' : 'Aggiungi Carte'}</button>
-               </div>
-             )}
-          </div>
-
-          {allResults.length > 0 && (
-            <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 backdrop-blur-sm">
-              <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
-                 <h3 className="text-gray-300 text-sm font-bold">Risultati:</h3>
-                 <div className="flex items-center gap-2 bg-gray-900 p-1 rounded-lg border border-gray-700">
-                    <button onClick={goToPrevPage} disabled={localPage === 0} className={`w-8 h-8 rounded font-bold text-lg flex items-center justify-center ${localPage === 0 ? 'bg-gray-700 text-gray-500' : 'bg-blue-600 text-white shadow'}`}>⬅</button>
-                    <span className="text-xs font-bold text-white px-2">Pag {localPage + 1} di {maxLocalPages||1}</span>
-                    <button onClick={goToNextPage} disabled={localPage + 1 >= maxLocalPages && !nextScryfallUrl} className={`w-8 h-8 rounded font-bold text-lg flex items-center justify-center ${(localPage + 1 >= maxLocalPages && !nextScryfallUrl) ? 'bg-gray-700 text-gray-500' : 'bg-blue-600 text-white shadow'}`}>➡</button>
+              <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
+                 <h3 className="font-bold text-blue-400 mb-2 border-b border-gray-700 pb-1">Ricerca Carte</h3>
+                 <p className="text-[10px] text-gray-400 mb-3 text-center uppercase tracking-wider font-bold">🇺🇸 Cerca in Inglese (es. "Plains", "Angel")</p>
+                 
+                 <div className="flex gap-2 mb-3">
+                   <input type="text" placeholder="Nome della carta..." value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-3 text-white outline-none" />
                  </div>
+                 
+                 <div className="flex gap-2 mb-3 overflow-x-auto pb-1 justify-center">
+                   {ManaColors.map(m => (
+                     <button key={m.id} onClick={() => toggleMana(m.id)} className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold border-2 ${mana.includes(m.id) ? 'border-white scale-110' : 'border-transparent opacity-50'} ${m.color}`}>{m.label}</button>
+                   ))}
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-2 mb-4">
+                   <select value={cardType} onChange={e => setCardType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm outline-none">
+                     <option value="">Tipo...</option>
+                     <option value="creature">Creatura</option>
+                     <option value="artifact">Artefatto</option>
+                     <option value="enchantment">Incantesimo</option>
+                     <option value="instant">Istantaneo</option>
+                     <option value="sorcery">Stregoneria</option>
+                     <option value="land">Terra</option>
+                   </select>
+                   <input type="text" placeholder="Sottotipo (es. Goblin)" value={subType} onChange={e => setSubType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm outline-none" />
+                 </div>
+
+                 <div className="flex gap-2 mb-4">
+                   <span className="text-gray-300 text-sm py-2 font-bold">Costo:</span>
+                   <select value={cmcOp} onChange={e => setCmcOp(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold outline-none">
+                     <option value="=">=</option><option value=">">&gt;</option><option value="<">&lt;</option>
+                   </select>
+                   <input type="number" inputMode="numeric" min="0" value={cmcVal} onChange={e => setCmcVal(e.target.value)} className="w-16 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold text-center outline-none" />
+                 </div>
+
+                 <div className="flex gap-2">
+                   <button onClick={searchCard} className="flex-1 bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded text-white shadow-lg transition-colors">
+                     {loading ? "Cerco..." : "Cerca Carte"}
+                   </button>
+                   <button onClick={loadMyProxies} className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded text-white shadow-lg transition-colors">
+                     ✨ Mie Proxy
+                   </button>
+                 </div>
+                 
+                 <button onClick={() => setShowImport(!showImport)} className="text-sm text-blue-400 hover:text-blue-300 underline mt-4 block text-center w-full transition-colors">📥 Importa da Testo (Es. Moxfield)</button>
+                 {showImport && (
+                   <div className="mt-2 animate-fade">
+                     <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="1 Sol Ring&#10;1 Command Tower" className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm mb-2 outline-none"></textarea>
+                     <button onClick={handleImport} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold transition-colors">{loading ? 'Importo...' : 'Aggiungi Carte'}</button>
+                   </div>
+                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                {currentResults.map((card, i) => (
-                  <div key={i} className="relative cursor-pointer hover:ring-2 ring-blue-500 rounded shadow-md" onClick={() => { setSelectedCard(card); setAddQty(1); }}>
-                    <img src={card.proxyImage || card.image} alt={card.name} className="w-full rounded" />
+              {allResults.length > 0 ? (
+                <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 backdrop-blur-sm animate-fade">
+                  <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
+                     <h3 className="text-gray-300 text-sm font-bold">Risultati:</h3>
+                     <div className="flex items-center gap-2 bg-gray-900 p-1 rounded-lg border border-gray-700">
+                        <button onClick={goToPrevPage} disabled={localPage === 0} className={`w-8 h-8 rounded font-bold text-lg flex items-center justify-center ${localPage === 0 ? 'bg-gray-700 text-gray-500' : 'bg-blue-600 text-white shadow transition-colors'}`}>⬅</button>
+                        <span className="text-xs font-bold text-white px-2">Pag {localPage + 1} di {maxLocalPages||1}</span>
+                        <button onClick={goToNextPage} disabled={localPage + 1 >= maxLocalPages && !nextScryfallUrl} className={`w-8 h-8 rounded font-bold text-lg flex items-center justify-center ${(localPage + 1 >= maxLocalPages && !nextScryfallUrl) ? 'bg-gray-700 text-gray-500' : 'bg-blue-600 text-white shadow transition-colors'}`}>➡</button>
+                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {groupedDeck.length > 0 && (
-            <div className="bg-gray-800/90 p-3 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
-              <h3 className="font-bold text-white mb-3 pl-2">La tua Lista Raggruppata:</h3>
-              <div className="space-y-2">
-                {groupedDeck.map((card, index) => (
-                  <div key={index} className={`flex gap-2 bg-gray-900 p-2 rounded-lg border ${card.isCmdrFlag ? 'border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'border-gray-700'}`}>
-                    <div className="relative cursor-pointer shrink-0" onClick={() => { setManagingCard(card); setManageQty(card.count); }}>
-                        <img src={card.proxyImage || card.image} alt={card.name} className="w-14 rounded object-cover shadow border border-gray-600" />
-                        <div className="absolute -top-2 -right-2 bg-blue-600 text-white font-black text-xs w-6 h-6 flex items-center justify-center rounded-full shadow border border-blue-400">
-                           {card.count}
+                  <div className="grid grid-cols-3 gap-2">
+                    {currentResults.map((card, i) => (
+                      <div key={i} className="relative cursor-pointer hover:ring-2 ring-blue-500 rounded shadow-md" onClick={() => openSubView(setSelectedCard, card, setAddQty, 1)}>
+                        <img src={card.proxyImage || card.image || "mtg-bg.jpg"} alt={card.name} className="w-full rounded" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {groupedDeck.length > 0 ? (
+                <div className="bg-gray-800/90 p-3 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm animate-fade">
+                  <h3 className="font-bold text-white mb-3 pl-2">La tua Lista Raggruppata:</h3>
+                  <div className="space-y-2">
+                    {groupedDeck.map((card, index) => (
+                      <div key={index} className={`flex gap-2 bg-gray-900 p-2 rounded-lg border ${card.isCmdrFlag ? 'border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'border-gray-700'}`}>
+                        <div className="relative cursor-pointer shrink-0" onClick={() => openSubView(setManagingCard, card, setManageQty, card.count)}>
+                            <img src={card.proxyImage || card.image || "mtg-bg.jpg"} alt={card.name} className="w-14 rounded object-cover shadow border border-gray-600" />
+                            <div className="absolute -top-2 -right-2 bg-blue-600 text-white font-black text-xs w-6 h-6 flex items-center justify-center rounded-full shadow border border-blue-400">
+                               {card.count}
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div className="flex-1 text-sm flex flex-col justify-between pt-1 overflow-hidden">
-                      <h4 className="font-bold text-gray-200 text-xs leading-tight truncate pr-1">{card.name}</h4>
-                      
-                      <div className="flex items-center justify-between mt-1">
-                        {deckFormat === 'commander' && (
-                          <label className="flex items-center gap-1 text-yellow-500 text-[10px] font-bold cursor-pointer">
-                            <input type="checkbox" checked={card.isCmdrFlag} onChange={() => toggleGroupCommander(card.name + (card.isCustom ? card.proxyImage : ""))} className="accent-yellow-500" /> Cmdr
-                          </label>
-                        )}
                         
-                        <div className="flex gap-1 ml-auto">
-                          <button onClick={() => setEditingProxyCard(deck.find(c => (c.name + (c.isCustom ? c.proxyImage : "")) === (card.name + (card.isCustom ? card.proxyImage : ""))))} className="text-[10px] bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded shadow">🎨 Proxy</button>
+                        <div className="flex-1 text-sm flex flex-col justify-between pt-1 overflow-hidden">
+                          <h4 className="font-bold text-gray-200 text-xs leading-tight truncate pr-1">{card.name}</h4>
+                          
+                          <div className="flex items-center justify-between mt-1">
+                            {deckFormat === 'commander' && (
+                              <label className="flex items-center gap-1 text-yellow-500 text-[10px] font-bold cursor-pointer">
+                                <input type="checkbox" checked={card.isCmdrFlag} onChange={() => toggleGroupCommander(card.name + (card.isCustom ? card.proxyImage : ""))} className="accent-yellow-500" /> Cmdr
+                              </label>
+                            )}
+                            
+                            <div className="flex gap-1 ml-auto">
+                              <button onClick={() => openSubView(setEditingProxyCard, deck.find(c => (c.name + (c.isCustom ? c.proxyImage : "")) === (card.name + (card.isCustom ? card.proxyImage : ""))))} className="text-[10px] bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded shadow transition-colors">🎨 Proxy</button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <button onClick={saveDeck} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(22,163,74,0.5)] sticky bottom-4 z-40">SALVA MAZZO</button>
+                </div>
+              ) : null}
+              <button onClick={saveDeck} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-[0_0_15px_rgba(22,163,74,0.5)] sticky bottom-4 z-40 transition-colors">SALVA MAZZO</button>
+          </div>
         </div>
       );
     };
@@ -791,17 +796,17 @@
             return (
               <div key={d.id} className="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-600 overflow-hidden shadow-xl flex flex-col">
                  <div className="h-32 bg-gray-900 relative">
-                   <img src={mainImg} className="w-full h-full object-cover object-top opacity-60" />
+                   <img src={mainImg || "mtg-bg.jpg"} className="w-full h-full object-cover object-top opacity-60" />
                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
                    <h3 className="absolute bottom-2 left-4 text-2xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">{d.name}</h3>
                    <span className="absolute top-2 right-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow uppercase">{d.format || 'Commander'}</span>
                  </div>
                  <div className="p-3 bg-gray-900 grid grid-cols-2 gap-2 text-sm font-bold">
-                   <button onClick={() => navigate('analysis', d)} className="col-span-2 bg-blue-600 hover:bg-blue-500 text-white rounded py-3 shadow text-base">📊 Analisi & Master IA</button>
-                   <button onClick={() => navigate('deckbuilder', d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow">Modifica</button>
-                   <button onClick={() => navigate('printview', d)} className="bg-purple-600 hover:bg-purple-500 text-white rounded py-2 shadow">Stampa PDF</button>
-                   <button onClick={() => exportText(d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow">Esporta Testo</button>
-                   <button onClick={() => deleteDeck(d.id)} className="bg-red-800 hover:bg-red-700 text-white rounded py-2 shadow">Elimina</button>
+                   <button onClick={() => navigate('analysis', d)} className="col-span-2 bg-blue-600 hover:bg-blue-500 text-white rounded py-3 shadow text-base transition-colors">📊 Analisi & Master IA</button>
+                   <button onClick={() => navigate('deckbuilder', d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow transition-colors">Modifica</button>
+                   <button onClick={() => navigate('printview', d)} className="bg-purple-600 hover:bg-purple-500 text-white rounded py-2 shadow transition-colors">Stampa PDF</button>
+                   <button onClick={() => exportText(d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow transition-colors">Esporta Testo</button>
+                   <button onClick={() => deleteDeck(d.id)} className="bg-red-800 hover:bg-red-700 text-white rounded py-2 shadow transition-colors">Elimina</button>
                  </div>
               </div>
             );
@@ -864,7 +869,7 @@ ${list}`;
 
       return (
          <div className="max-w-2xl mx-auto space-y-4">
-           <button onClick={() => navigate('mydecks')} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded font-bold mb-2 shadow">⬅ Indietro ai Mazzi</button>
+           <button onClick={() => navigate('mydecks')} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded font-bold mb-2 shadow transition-colors">⬅ Indietro ai Mazzi</button>
            
            <div className="bg-gray-800/90 p-6 rounded-xl border border-gray-600 shadow-xl backdrop-blur-sm">
              <h2 className="text-3xl font-black text-white mb-1 drop-shadow-md">{deck.name}</h2>
@@ -933,7 +938,7 @@ ${list}`;
                <button onClick={copyPrompt} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all">
                  🤖 Copia Prompt IA (Gemini/ChatGPT)
                </button>
-               <button onClick={copyList} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow border border-gray-600 flex items-center justify-center gap-2 mt-2">
+               <button onClick={copyList} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow border border-gray-600 flex items-center justify-center gap-2 mt-2 transition-colors">
                  📋 Copia solo Lista Testuale
                </button>
              </div>
@@ -949,12 +954,12 @@ ${list}`;
           <div className="no-print mb-4 p-4 bg-gray-100 rounded border border-gray-300 flex justify-between items-center shadow-md">
             <p className="font-bold text-gray-800 text-sm">Usa "Stampa -> Salva come PDF".<br/>(Carte formattate a 63x88mm).</p>
             <div className="space-x-2 flex">
-              <button onClick={() => navigate('mydecks')} className="px-4 py-2 bg-gray-500 text-white rounded font-bold">Indietro</button>
-              <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white font-bold rounded">Stampa PDF</button>
+              <button onClick={() => navigate('mydecks')} className="px-4 py-2 bg-gray-500 text-white rounded font-bold transition-colors">Indietro</button>
+              <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white font-bold rounded transition-colors">Stampa PDF</button>
             </div>
           </div>
           <div className="print-grid">
-            {deck.cards.map((c, i) => <img key={i} src={c.proxyImage || c.image} className="print-card shadow-sm border border-gray-300" />)}
+            {deck.cards.map((c, i) => <img key={i} src={c.proxyImage || c.image || "mtg-bg.jpg"} className="print-card shadow-sm border border-gray-300" />)}
           </div>
         </div>
       );
@@ -1022,7 +1027,7 @@ ${list}`;
               <option value={20}>20 (Standard)</option>
             </select>
           </div>
-          <button onClick={startGame} className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl text-xl shadow-[0_0_15px_rgba(220,38,38,0.5)]">INIZIA</button>
+          <button onClick={startGame} className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-xl text-xl shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all">INIZIA</button>
         </div>
       );
 
@@ -1030,7 +1035,7 @@ ${list}`;
 
       return (
         <div className="fixed inset-0 z-[100] bg-black p-1 flex flex-col h-[100dvh] w-[100dvw]">
-          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci</button>
+          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci / Setup</button>
           <div className={`flex-1 grid ${gridClass} gap-1 h-full w-full pt-12`}>
              {players.map(p => <PlayerCard key={p.id} player={p} updateStat={updateStat} updateMana={updateMana} toggleImmunity={toggleImmunity} opponents={players.filter(op => op.id !== p.id)} updatePlayerConfig={updatePlayerConfig} />)}
           </div>
@@ -1050,12 +1055,12 @@ ${list}`;
       }
 
       const searchCmdBg = () => {
-         if(!cmdQuery) return;
-         fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cmdQuery)}`)
+         if(!cmdQuery.trim()) return;
+         fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cmdQuery.trim())}`)
             .then(res => res.json())
             .then(c => {
                if(c.id) {
-                 let imgUrl = c.image_uris ? c.image_uris.art_crop : (c.card_faces ? c.card_faces[0].image_uris.art_crop : null);
+                 let imgUrl = c.image_uris ? c.image_uris.art_crop : (c.card_faces && c.card_faces.length > 0 ? c.card_faces[0].image_uris.art_crop : null);
                  if(imgUrl) updatePlayerConfig(player.id, 'bgUrl', imgUrl);
                  setCmdQuery("");
                } else alert("Comandante non trovato");
@@ -1086,7 +1091,7 @@ ${list}`;
                 <p className="text-[10px] text-blue-300 font-bold mb-1 uppercase">🖼️ Sfondo Cmdr</p>
                 <div className="flex gap-1">
                   <input type="text" placeholder="Nome Inglese" value={cmdQuery} onChange={e=>setCmdQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 text-white text-[10px] outline-none" />
-                  <button onClick={searchCmdBg} className="bg-blue-600 px-2 rounded text-white font-bold text-[10px]">OK</button>
+                  <button onClick={searchCmdBg} className="bg-blue-600 px-2 rounded text-white font-bold text-[10px] transition-colors">OK</button>
                 </div>
               </div>
               <div className="bg-gray-800 p-1 rounded-lg border border-gray-700">
@@ -1101,7 +1106,7 @@ ${list}`;
                 <StatRow label="🛡️ Emblemi" value={player.emblems} onSub={() => updateStat(player.id, 'emblems', -1)} onAdd={() => updateStat(player.id, 'emblems', 1)} />
               </div>
             </div>
-            <button onClick={() => toggleImmunity(player.id)} className={`w-full py-1 mt-auto text-[10px] font-bold shadow-md transition-colors ${player.immune ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border-t border-gray-600'}`}>
+            <button onClick={() => toggleImmunity(player.id)} className={`w-full py-1 mt-auto text-[10px] font-bold shadow-md transition-colors ${player.immune ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border-t border-gray-600 hover:bg-gray-700'}`}>
               {player.immune ? '🛡️ Immunità Attiva' : 'Attiva Immunità'}
             </button>
           </div>
@@ -1117,14 +1122,14 @@ ${list}`;
                   <div key={m.id} className="bg-gray-800 rounded border border-gray-700 flex flex-col items-center justify-center p-1">
                      <span className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-[10px] border shadow-sm ${m.color}`}>{m.label}</span>
                      <div className="flex w-full justify-between items-center mt-1 px-1">
-                        <button onClick={() => updateMana(player.id, m.id, -1)} className="w-6 h-6 bg-red-900/80 text-red-300 font-bold rounded">-</button>
+                        <button onClick={() => updateMana(player.id, m.id, -1)} className="w-6 h-6 bg-red-900/80 hover:bg-red-800 text-red-300 font-bold rounded transition-colors">-</button>
                         <span className="text-lg font-black text-white">{player.mana[m.id]}</span>
-                        <button onClick={() => updateMana(player.id, m.id, 1)} className="w-6 h-6 bg-green-900/80 text-green-300 font-bold rounded">+</button>
+                        <button onClick={() => updateMana(player.id, m.id, 1)} className="w-6 h-6 bg-green-900/80 hover:bg-green-800 text-green-300 font-bold rounded transition-colors">+</button>
                      </div>
                   </div>
                ))}
             </div>
-            <button onClick={() => { ManaColors.forEach(m => updatePlayerConfig(player.id, 'mana', {W:0,U:0,B:0,R:0,G:0,C:0})) }} className="w-full py-1 mt-auto text-[10px] font-bold shadow-md bg-gray-700 text-white border-t border-gray-600">🔄 Svuota Pool</button>
+            <button onClick={() => { ManaColors.forEach(m => updatePlayerConfig(player.id, 'mana', {W:0,U:0,B:0,R:0,G:0,C:0})) }} className="w-full py-1 mt-auto text-[10px] font-bold shadow-md bg-gray-700 hover:bg-gray-600 text-white border-t border-gray-600 transition-colors">🔄 Svuota Pool</button>
           </div>
          );
       }
@@ -1150,9 +1155,9 @@ ${list}`;
       <div className="flex justify-between items-center bg-gray-900 rounded px-1 py-1 mt-1 border border-gray-700 shadow-inner">
         <span className="text-gray-300 font-bold text-[10px] truncate max-w-[50%]">{label}</span>
         <div className="flex items-center space-x-1">
-          <button onClick={onSub} className="w-6 h-6 bg-red-900/80 rounded font-bold text-red-300">-</button>
+          <button onClick={onSub} className="w-6 h-6 bg-red-900/80 rounded font-bold text-red-300 transition-colors">-</button>
           <span className="w-4 text-center font-bold text-white text-xs">{value}</span>
-          <button onClick={onAdd} className="w-6 h-6 bg-green-900/80 rounded font-bold text-green-300">+</button>
+          <button onClick={onAdd} className="w-6 h-6 bg-green-900/80 rounded font-bold text-green-300 transition-colors">+</button>
         </div>
       </div>
     );
@@ -1181,7 +1186,7 @@ ${list}`;
           <h2 className="text-3xl font-black mb-6 text-center text-purple-500 drop-shadow-md">Tira il Dado (D20)</h2>
           <label className="block text-gray-300 font-bold mb-2">Numero Giocatori</label>
           <input type="number" min="2" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center mb-6 font-bold text-xl outline-none" />
-          <button onClick={rollDice} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-4 rounded-xl text-xl mb-6 shadow-[0_0_15px_rgba(147,51,234,0.5)]">TIRA IL DADO</button>
+          <button onClick={rollDice} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-4 rounded-xl text-xl mb-6 shadow-[0_0_15px_rgba(147,51,234,0.5)] transition-all">TIRA IL DADO</button>
           {results.length > 0 && (
             <div className="space-y-2 animate-fade">
               {results.map((r, i) => (
@@ -1208,12 +1213,12 @@ ${list}`;
             <h2 className="text-3xl font-black mb-4 text-green-500 drop-shadow-md">Judge Desk</h2>
             <p className="text-sm text-gray-300 mb-6 font-semibold">Cerca il tuo dubbio tra i Ruling Ufficiali o contatta un Arbitro vero.</p>
             
-            <textarea className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-3 text-white mb-4 font-semibold outline-none" placeholder="Scrivi il tuo dubbio sulla combo..." value={question} onChange={(e) => setQuestion(e.target.value)}></textarea>
-            <button onClick={searchRuling} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-lg mb-6 flex justify-center items-center gap-2">🔍 Cerca Ruling Online</button>
+            <textarea className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-3 text-white mb-4 font-semibold outline-none focus:border-blue-500" placeholder="Scrivi il tuo dubbio sulla combo..." value={question} onChange={(e) => setQuestion(e.target.value)}></textarea>
+            <button onClick={searchRuling} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-lg mb-6 flex justify-center items-center gap-2 transition-all">🔍 Cerca Ruling Online</button>
 
             <div className="border-t border-gray-700 pt-6 space-y-3">
-               <a href="https://magic.wizards.com/en/rules" target="_blank" className="block w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow border border-gray-600">📖 PDF Regole Ufficiali</a>
-               <a href="https://chat.magicjudges.org/mtgrules/" target="_blank" className="block w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow border border-blue-500">💬 Chat Live Judge DCI (24/7)</a>
+               <a href="https://magic.wizards.com/en/rules" target="_blank" className="block w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow border border-gray-600 transition-colors">📖 PDF Regole Ufficiali</a>
+               <a href="https://chat.magicjudges.org/mtgrules/" target="_blank" className="block w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow border border-blue-500 transition-colors">💬 Chat Live Judge DCI (24/7)</a>
             </div>
           </div>
         </div>
