@@ -31,7 +31,7 @@
 
     const Icons = {
       Menu: () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>,
-      Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
+      Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 001 1m-6 0h6"/></svg>,
       Back: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>,
       Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
     };
@@ -100,7 +100,7 @@
               {view === 'deckbuilder' && <DeckBuilder navigate={navigate} activeDeck={activeDeck} />}
               {view === 'mydecks' && <MyDecks navigate={navigate} />}
               {view === 'analysis' && <DeckAnalysis deck={activeDeck} navigate={navigate} />}
-              {view === 'proxycreator' && <ProxyCreatorLair />}
+              {view === 'proxycreator' && <ProxyEditor isStandalone={true} />}
               {view === 'printview' && <PrintView deck={activeDeck} navigate={navigate} />}
               {(view === 'game' || view === 'game_active') && <GameUtility view={view} setView={setView} />}
               {view === 'dice' && <DiceRoller />}
@@ -141,7 +141,7 @@
       </button>
     );
 
-    // --- DECKBUILDER (CON FORMATI, BANLIST E INLINE PROXY) ---
+    // --- DECKBUILDER ---
     const DeckBuilder = ({navigate, activeDeck}) => {
       const [deckName, setDeckName] = useState(activeDeck ? activeDeck.name : "");
       const [deckFormat, setDeckFormat] = useState(activeDeck ? (activeDeck.format || 'commander') : 'commander');
@@ -152,6 +152,8 @@
       const [mana, setMana] = useState([]);
       const [cardType, setCardType] = useState("");
       const [subType, setSubType] = useState("");
+      const [cmcOp, setCmcOp] = useState("=");
+      const [cmcVal, setCmcVal] = useState("");
       
       const [results, setResults] = useState([]);
       const [loading, setLoading] = useState(false);
@@ -164,7 +166,6 @@
       const [importText, setImportText] = useState("");
       const [showImport, setShowImport] = useState(false);
 
-      // Stato per la modifica Proxy inline
       const [editingProxyCard, setEditingProxyCard] = useState(null);
 
       const toggleMana = (m) => setMana(mana.includes(m) ? mana.filter(x => x !== m) : [...mana, m]);
@@ -175,7 +176,6 @@
           .then(res => res.json())
           .then(data => {
             if (data.data) {
-               // Aggiungo il recupero di 'legalities' di Scryfall
                const cards = data.data.filter(c => c.image_uris || (c.card_faces && c.card_faces[0].image_uris)).map(c => {
                  let img = null;
                  if (c.image_uris) img = c.image_uris.normal;
@@ -185,7 +185,6 @@
                  };
                });
                setResults(cards);
-
                if (isNewSearch) {
                   setPageUrls([url, data.next_page || null]);
                   setCurrentPageIdx(0);
@@ -196,9 +195,7 @@
                      setPageUrls(newUrls);
                   }
                }
-            } else { 
-               if(isNewSearch) { setResults([]); alert("Nessuna carta trovata!"); }
-            }
+            } else { if(isNewSearch) { setResults([]); alert("Nessuna carta trovata!"); } }
             setLoading(false);
           })
           .catch(e => { console.error(e); setLoading(false); });
@@ -212,14 +209,14 @@
         }
         if (cardType) searchQuery += `t:${cardType} `;
         if (subType) searchQuery += `t:${subType} `;
-        
+        if (cmcVal !== "") searchQuery += `cmc${cmcOp}${cmcVal} `;
         if(!searchQuery.trim()) return alert("Inserisci almeno un parametro di ricerca!");
         eseguiRicerca(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(searchQuery.trim())}`, true);
       };
 
       const loadMyProxies = () => {
         const proxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
-        if (proxies.length === 0) return alert("Non hai ancora creato nessuna Proxy!");
+        if (proxies.length === 0) return alert("Non hai ancora creato nessuna Proxy! Vai in Proxy Lair.");
         setResults(proxies);
         setPageUrls([]);
         setCurrentPageIdx(0);
@@ -289,8 +286,7 @@
                  });
                }
                return arr;
-            })
-            .catch(e => { return []; });
+            }).catch(e => { return []; });
           promises.push(p);
         }
         
@@ -302,24 +298,20 @@
         });
       };
 
-      // SALVATAGGIO PROXY INLINE (aggiorna la carta nel mazzo)
       const saveInlineProxy = (updatedCard) => {
          setDeck(deck.map(c => c.deckId === updatedCard.deckId ? updatedCard : c));
          setEditingProxyCard(null);
       };
 
-      // --- CONTROLLO REGOLE E LEGALITA' MULTIFORMATO ---
       let warnings = [];
       const commanders = deck.filter(c => c.isCommander);
       const cmdColors = new Set();
       commanders.forEach(c => { if (c.colors) c.colors.forEach(col => cmdColors.add(col)); });
 
       if (!rulebreaker) {
-         // Dimensioni
          if (deckFormat === 'commander' && deck.length !== 100) warnings.push(`Commander: il mazzo deve avere 100 carte esatte (ora ${deck.length}).`);
          if ((deckFormat === 'pauper' || deckFormat === 'modern') && deck.length < 60) warnings.push(`${deckFormat.toUpperCase()}: minimo 60 carte (ora ${deck.length}).`);
 
-         // Comandante
          if (deckFormat === 'commander') {
              if (commanders.length === 0) warnings.push("Commander: Manca il Comandante.");
              if (commanders.length > 0 && commanders.some(c => c.type && !c.type.toLowerCase().includes("legendary") && !c.type.toLowerCase().includes("planeswalker"))) {
@@ -332,22 +324,17 @@
          const multiCopyAllowed = ["relentless rats", "rat colony", "shadowborn apostle", "persistent petitioners", "dragon's approach", "slime against humanity", "nazgûl"];
 
          deck.forEach(c => {
-            // Legalità formato via Scryfall API!
-            if (c.legalities) {
-                if (c.legalities[deckFormat] !== 'legal' && c.legalities[deckFormat] !== 'restricted') {
-                    if(!warnings.includes(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`)) {
-                        warnings.push(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`);
-                    }
+            if (c.legalities && c.legalities[deckFormat] !== 'legal' && c.legalities[deckFormat] !== 'restricted') {
+                if(!warnings.includes(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`)) {
+                    warnings.push(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`);
                 }
             }
 
-            // Identità colore Commander
             if (deckFormat === 'commander' && !c.isCommander && c.colors && c.colors.length > 0) {
                if (cmdColors.size === 0) hasIllegalColor = true;
                else c.colors.forEach(col => { if (!cmdColors.has(col)) hasIllegalColor = true; });
             }
 
-            // Conteggio copie per Singleton (Cmdr) o x4 (Modern/Pauper)
             let nLower = c.name.toLowerCase();
             let isBasic = c.type && c.type.toLowerCase().includes("basic");
             let canBypassCount = isBasic || multiCopyAllowed.includes(nLower);
@@ -373,7 +360,6 @@
       return (
         <div className="max-w-2xl mx-auto space-y-4 relative">
           
-          {/* MODALE ANTEPRIMA RICERCA FISSA */}
           {selectedCard && (
             <div className="fixed inset-0 bg-black/95 z-[100] h-[100dvh] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setSelectedCard(null)}>
               <div onClick={e => e.stopPropagation()} className="max-w-md w-full flex flex-col items-center">
@@ -397,9 +383,8 @@
             </div>
           )}
 
-          {/* MODALE INLINE PROXY CREATOR */}
           {editingProxyCard && (
-             <ProxyInlineEditor card={editingProxyCard} onClose={() => setEditingProxyCard(null)} onSave={saveInlineProxy} />
+             <ProxyEditor card={editingProxyCard} onClose={() => setEditingProxyCard(null)} onSave={saveInlineProxy} isStandalone={false} />
           )}
 
           <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
@@ -533,8 +518,11 @@
       );
     };
 
-    // --- PROXY INLINE EDITOR (MODALITA' DENTRO IL MAZZO) ---
-    const ProxyInlineEditor = ({card, onClose, onSave}) => {
+    // --- PROXY EDITOR (UNIFICATO PER STANDALONE E INLINE) ---
+    const ProxyEditor = ({card, onClose, onSave, isStandalone}) => {
+      const [baseQuery, setBaseQuery] = useState("");
+      const [baseCard, setBaseCard] = useState(card ? {name: card.name, type: card.type, img: card.image, cmc: card.cmc} : null);
+      
       const [customName, setCustomName] = useState("");
       const [customImg, setCustomImg] = useState("");
       const [zoom, setZoom] = useState(1);
@@ -543,27 +531,38 @@
       const [maskLeft, setMaskLeft] = useState(8.2); const [maskWidth, setMaskWidth] = useState(83.6);
       const [isGenerating, setIsGenerating] = useState(false);
 
+      const searchBase = () => {
+        fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(baseQuery)}`)
+          .then(res => res.json())
+          .then(c => {
+             if(c.id) {
+               let imgUrl = c.image_uris ? c.image_uris.normal : (c.card_faces ? c.card_faces[0].image_uris.normal : null);
+               setBaseCard({ name: c.name, type: c.type_line, img: imgUrl, cmc: c.cmc });
+               setCustomName(""); setCustomImg(""); setZoom(1); setPosX(50); setPosY(50);
+               setMaskTop(11.5); setMaskHeight(44); setMaskLeft(8.2); setMaskWidth(83.6);
+             } else alert("Carta non trovata");
+          });
+      };
+
       const handleImage = (e) => {
         const file = e.target.files[0];
         if(file) { const r = new FileReader(); r.onload = (ev) => setCustomImg(ev.target.result); r.readAsDataURL(file); }
       };
 
       const eseguiSalvataggio = () => {
-        if(!customImg) return alert("Carica un'immagine!");
+        if(!baseCard || !customImg) return alert("Carica un'immagine!");
         setIsGenerating(true);
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const bImg = new Image();
-        bImg.crossOrigin = "anonymous"; 
-        bImg.src = card.image; // Usa l'immagine originale come base
+        bImg.crossOrigin = "anonymous"; bImg.src = baseCard.img;
 
         bImg.onload = () => {
           canvas.width = bImg.width; canvas.height = bImg.height; 
           ctx.drawImage(bImg, 0, 0, canvas.width, canvas.height);
 
-          const uImg = new Image();
-          uImg.src = customImg;
+          const uImg = new Image(); uImg.src = customImg;
           uImg.onload = () => {
              const artX = canvas.width * (maskLeft / 100); const artW = canvas.width * (maskWidth / 100);
              const artY = canvas.height * (maskTop / 100); const artH = canvas.height * (maskHeight / 100);
@@ -584,85 +583,97 @@
              if (customName) {
                 const tx = canvas.width * 0.07; const ty = canvas.height * 0.045;
                 const tw = canvas.width * 0.65; const th = canvas.height * 0.055;
-                
                 ctx.fillStyle = "#1a1a1a"; ctx.fillRect(tx, ty, tw, th);
                 ctx.strokeStyle = "#555"; ctx.strokeRect(tx, ty, tw, th);
                 ctx.fillStyle = "white"; ctx.font = `bold ${canvas.height * 0.025}px Georgia, serif`;
                 ctx.fillText(customName, tx + 10, ty + (th/1.8));
                 ctx.fillStyle = "#aaa"; ctx.font = `italic ${canvas.height * 0.015}px Georgia, serif`;
-                ctx.fillText(card.name, tx + 10, ty + (th/1.1));
+                ctx.fillText(baseCard.name, tx + 10, ty + (th/1.1));
              }
 
              const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
              
-             // Salva anche nel DB Proxy per usi futuri
-             const newProxy = { id: 'proxy-' + Date.now(), name: customName || card.name, image: finalDataUrl, proxyImage: finalDataUrl, type: card.type, cmc: card.cmc || 0, colors: card.colors||[], isCommander: false, isCustom: true };
+             const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: card ? card.colors : [], isCommander: false, isCustom: true };
              let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
              savedProxies.push(newProxy); localStorage.setItem('mtg_proxies', JSON.stringify(savedProxies));
              
              setIsGenerating(false);
-             
-             // Restituisci la carta aggiornata al Deckbuilder!
-             onSave({...card, proxyImage: finalDataUrl, name: customName || card.name, isCustom: true});
+             if(isStandalone) alert("Proxy Salvata nel Database! (Vai nel Deckbuilder per usarla)");
+             else onSave({...card, proxyImage: finalDataUrl, name: customName || card.name, isCustom: true});
           };
         };
       };
 
-      return (
-        <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-start pt-10 px-2 overflow-y-auto pb-10 animate-fade">
-           <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
+      const Content = () => (
+         <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
               <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
-                 <h2 className="text-xl font-bold text-purple-400">Modifica: {card.name}</h2>
-                 <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>
+                 <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
+                 {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
               </div>
-
-              <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold" />
-              <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow">
-                📸 Carica Immagine Proxy <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
-              </label>
-
-              {customImg && (
-                  <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 space-y-3">
-                     <div className="space-y-1">
-                       <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice</p>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Giù</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Dx</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
-                     </div>
-                     <div className="space-y-1 pt-2 border-t border-gray-700">
-                       <p className="text-[10px] font-bold text-purple-400 uppercase">Foto</p>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Zoom</span><input type="range" min="1" max="3" step="0.1" value={zoom} onChange={e=>setZoom(e.target.value)} className="w-full accent-purple-500" /></div>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Orizz</span><input type="range" min="0" max="100" value={posX} onChange={e=>setPosX(e.target.value)} className="w-full accent-purple-500" /></div>
-                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Vert</span><input type="range" min="0" max="100" value={posY} onChange={e=>setPosY(e.target.value)} className="w-full accent-purple-500" /></div>
-                     </div>
-                  </div>
+              
+              {isStandalone && (
+                <div className="flex gap-2 mb-4">
+                  <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white" />
+                  <button onClick={searchBase} className="bg-purple-600 px-3 rounded text-white font-bold">Cerca</button>
+                </div>
               )}
 
-              <div className="relative w-full rounded-xl overflow-hidden shadow-2xl bg-black border border-gray-600 mt-4" style={{ aspectRatio: '63/88' }}>
-                  <img src={card.image} className="absolute inset-0 w-full h-full pointer-events-none" />
-                  {customImg && (
-                    <div className="absolute bg-black z-10 overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] border border-black/50" style={{ top: `${maskTop}%`, left: `${maskLeft}%`, width: `${maskWidth}%`, height: `${maskHeight}%` }}>
-                      <img src={customImg} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${posX - 50}%, ${posY - 50}%) scale(${zoom})` }} />
-                    </div>
-                  )}
-                  {customName && (
-                    <div className="absolute z-20 flex items-center px-3" style={{ top: '4.8%', left: '7.5%', width: '65%', height: '4.5%' }}>
-                      <span className="text-white tracking-wider truncate" style={{ fontFamily: "Georgia, serif", fontSize: '16px', fontWeight: '900', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{customName}</span>
-                    </div>
-                  )}
-              </div>
+              {baseCard && (
+               <div className="animate-fade space-y-3">
+                 <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold" />
+                 <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow">
+                   📸 Carica Immagine <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
+                 </label>
 
-              <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
-                  {isGenerating ? 'Attendere...' : '💾 Applica Proxy al Mazzo'}
-              </button>
+                 {customImg && (
+                     <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 space-y-3">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice Riquadro</p>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Altezza</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Largh.</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
+                        </div>
+                        <div className="space-y-1 pt-2 border-t border-gray-700">
+                          <p className="text-[10px] font-bold text-purple-400 uppercase">Foto Interna</p>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Zoom</span><input type="range" min="1" max="3" step="0.1" value={zoom} onChange={e=>setZoom(e.target.value)} className="w-full accent-purple-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Orizz</span><input type="range" min="0" max="100" value={posX} onChange={e=>setPosX(e.target.value)} className="w-full accent-purple-500" /></div>
+                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Vert</span><input type="range" min="0" max="100" value={posY} onChange={e=>setPosY(e.target.value)} className="w-full accent-purple-500" /></div>
+                        </div>
+                     </div>
+                 )}
+
+                 <div className="relative w-full rounded-xl overflow-hidden shadow-2xl bg-black border border-gray-600 mt-4" style={{ aspectRatio: '63/88' }}>
+                     <img src={baseCard.img} className="absolute inset-0 w-full h-full pointer-events-none" />
+                     {customImg && (
+                       <div className="absolute bg-black z-10 overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] border border-black/50" style={{ top: `${maskTop}%`, left: `${maskLeft}%`, width: `${maskWidth}%`, height: `${maskHeight}%` }}>
+                         <img src={customImg} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${posX - 50}%, ${posY - 50}%) scale(${zoom})` }} />
+                       </div>
+                     )}
+                     {customName && (
+                       <div className="absolute z-20 flex items-center px-3" style={{ top: '4.8%', left: '7.5%', width: '65%', height: '4.5%' }}>
+                         <span className="text-white tracking-wider truncate" style={{ fontFamily: "Georgia, serif", fontSize: '16px', fontWeight: '900', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{customName}</span>
+                       </div>
+                     )}
+                 </div>
+
+                 <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
+                     {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva' : '💾 Applica Proxy al Mazzo')}
+                 </button>
+               </div>
+              )}
            </div>
+      );
+
+      if (isStandalone) return <div className="max-w-md mx-auto"><Content /></div>;
+      return (
+        <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-start pt-6 px-2 overflow-y-auto pb-10 animate-fade">
+           <Content />
         </div>
       );
     };
 
-    // --- I MIEI MAZZI, ANALISI, PROXY LAIR RIMANGONO INVARIATI NELLA LOGICA (GIA' PERFETTI) ---
-    // (Ometto i commenti ripetitivi, ma i componenti sono tutti inclusi qui sotto per funzionare)
+    // --- I MIEI MAZZI, ANALISI, STAMPA, LIFE TRACKER, DADO, REGOLE (INVARIATI E FUNZIONANTI) ---
     
     const MyDecks = ({navigate}) => {
       const [decks, setDecks] = useState([]);
@@ -777,7 +788,7 @@ ${list}`;
                   <p className="text-2xl font-black text-white">{lands}</p>
                </div>
                <div className="bg-gray-900 p-2 rounded-lg border border-gray-700 shadow-inner">
-                  <p className="text-xs text-gray-400 font-bold uppercase">CMC</p>
+                  <p className="text-xs text-gray-400 font-bold uppercase">CMC Medio</p>
                   <p className="text-2xl font-black text-blue-400">{avgCMC.toFixed(2)}</p>
                </div>
              </div>
@@ -832,7 +843,7 @@ ${list}`;
                  🤖 Copia Prompt IA (Gemini/ChatGPT)
                </button>
                <button onClick={copyList} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow border border-gray-600 flex items-center justify-center gap-2 mt-2">
-                 📋 Copia solo Lista
+                 📋 Copia solo Lista Testuale
                </button>
              </div>
            </div>
@@ -858,173 +869,8 @@ ${list}`;
       );
     };
 
-    const ProxyCreatorLair = () => {
-      // Usa la stessa logica identica dell'inline editor per risparmiare codice, senza restituirla al mazzo
-      return (
-         <div className="max-w-md mx-auto">
-            <ProxyInlineEditor card={null} onClose={()=>null} onSave={() => {}} isStandalone={true} />
-         </div>
-      );
-    };
-
-    // Unico componente Proxy per Lair e per Deck
-    const ProxyInlineEditor = ({card, onClose, onSave, isStandalone}) => {
-      const [baseQuery, setBaseQuery] = useState("");
-      const [baseCard, setBaseCard] = useState(card ? {name: card.name, img: card.image, type: card.type, cmc: card.cmc} : null);
-      
-      const [customName, setCustomName] = useState("");
-      const [customImg, setCustomImg] = useState("");
-      const [zoom, setZoom] = useState(1);
-      const [posX, setPosX] = useState(50); const [posY, setPosY] = useState(50);
-      const [maskTop, setMaskTop] = useState(11.5); const [maskHeight, setMaskHeight] = useState(44); 
-      const [maskLeft, setMaskLeft] = useState(8.2); const [maskWidth, setMaskWidth] = useState(83.6);
-      const [isGenerating, setIsGenerating] = useState(false);
-
-      const searchBase = () => {
-        fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(baseQuery)}`)
-          .then(res => res.json())
-          .then(c => {
-             if(c.id) {
-               let imgUrl = c.image_uris ? c.image_uris.normal : (c.card_faces ? c.card_faces[0].image_uris.normal : null);
-               setBaseCard({ name: c.name, type: c.type_line, img: imgUrl, cmc: c.cmc });
-               setCustomName(""); setCustomImg(""); setZoom(1); setPosX(50); setPosY(50);
-               setMaskTop(11.5); setMaskHeight(44); setMaskLeft(8.2); setMaskWidth(83.6);
-             } else alert("Carta non trovata");
-          });
-      };
-
-      const handleImage = (e) => {
-        const file = e.target.files[0];
-        if(file) { const r = new FileReader(); r.onload = (ev) => setCustomImg(ev.target.result); r.readAsDataURL(file); }
-      };
-
-      const eseguiSalvataggio = () => {
-        if(!baseCard || !customImg) return alert("Carica un'immagine!");
-        setIsGenerating(true);
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const bImg = new Image();
-        bImg.crossOrigin = "anonymous"; bImg.src = baseCard.img;
-
-        bImg.onload = () => {
-          canvas.width = bImg.width; canvas.height = bImg.height; 
-          ctx.drawImage(bImg, 0, 0, canvas.width, canvas.height);
-
-          const uImg = new Image(); uImg.src = customImg;
-          uImg.onload = () => {
-             const artX = canvas.width * (maskLeft / 100); const artW = canvas.width * (maskWidth / 100);
-             const artY = canvas.height * (maskTop / 100); const artH = canvas.height * (maskHeight / 100);
-
-             ctx.save(); ctx.beginPath(); ctx.rect(artX, artY, artW, artH); ctx.clip(); 
-
-             const boxAspect = artW / artH; const imgAspect = uImg.width / uImg.height;
-             let baseW, baseH;
-             if (imgAspect > boxAspect) { baseH = artH; baseW = uImg.width * (artH / uImg.height); } 
-             else { baseW = artW; baseH = uImg.height * (artW / uImg.width); }
-             
-             const finalW = baseW * zoom; const finalH = baseH * zoom;
-             const offsetX = finalW * ((posX - 50) / 100); const offsetY = finalH * ((posY - 50) / 100);
-             const imgX = artX + (artW / 2) - (finalW / 2) + offsetX; const imgY = artY + (artH / 2) - (finalH / 2) + offsetY;
-
-             ctx.drawImage(uImg, imgX, imgY, finalW, finalH); ctx.restore();
-
-             if (customName) {
-                const tx = canvas.width * 0.07; const ty = canvas.height * 0.045;
-                const tw = canvas.width * 0.65; const th = canvas.height * 0.055;
-                ctx.fillStyle = "#1a1a1a"; ctx.fillRect(tx, ty, tw, th);
-                ctx.strokeStyle = "#555"; ctx.strokeRect(tx, ty, tw, th);
-                ctx.fillStyle = "white"; ctx.font = `bold ${canvas.height * 0.025}px Georgia, serif`;
-                ctx.fillText(customName, tx + 10, ty + (th/1.8));
-                ctx.fillStyle = "#aaa"; ctx.font = `italic ${canvas.height * 0.015}px Georgia, serif`;
-                ctx.fillText(baseCard.name, tx + 10, ty + (th/1.1));
-             }
-
-             const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-             
-             const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: [], isCommander: false, isCustom: true };
-             let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
-             savedProxies.push(newProxy); localStorage.setItem('mtg_proxies', JSON.stringify(savedProxies));
-             
-             setIsGenerating(false);
-             if(isStandalone) alert("Proxy Salvata nel Database! (Vai nel Deckbuilder per usarla)");
-             else onSave({...card, proxyImage: finalDataUrl, name: customName || card.name, isCustom: true});
-          };
-        };
-      };
-
-      const Content = () => (
-         <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
-              <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
-                 <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
-                 {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
-              </div>
-              
-              {isStandalone && (
-                <div className="flex gap-2 mb-4">
-                  <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white" />
-                  <button onClick={searchBase} className="bg-purple-600 px-3 rounded text-white font-bold">Cerca</button>
-                </div>
-              )}
-
-              {baseCard && (
-               <div className="animate-fade space-y-3">
-                 <input type="text" placeholder="Nuovo Titolo (Opzionale)" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white font-bold" />
-                 <label className="block w-full bg-gray-700 hover:bg-gray-600 text-center py-2 rounded cursor-pointer font-bold text-sm text-white shadow">
-                   📸 Carica Immagine <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
-                 </label>
-
-                 {customImg && (
-                     <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 space-y-3">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice Riquadro</p>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Altezza</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Largh.</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
-                        </div>
-                        <div className="space-y-1 pt-2 border-t border-gray-700">
-                          <p className="text-[10px] font-bold text-purple-400 uppercase">Foto Interna</p>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Zoom</span><input type="range" min="1" max="3" step="0.1" value={zoom} onChange={e=>setZoom(e.target.value)} className="w-full accent-purple-500" /></div>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Orizz</span><input type="range" min="0" max="100" value={posX} onChange={e=>setPosX(e.target.value)} className="w-full accent-purple-500" /></div>
-                          <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Vert</span><input type="range" min="0" max="100" value={posY} onChange={e=>setPosY(e.target.value)} className="w-full accent-purple-500" /></div>
-                        </div>
-                     </div>
-                 )}
-
-                 <div className="relative w-full rounded-xl overflow-hidden shadow-2xl bg-black border border-gray-600 mt-4" style={{ aspectRatio: '63/88' }}>
-                     <img src={baseCard.img} className="absolute inset-0 w-full h-full pointer-events-none" />
-                     {customImg && (
-                       <div className="absolute bg-black z-10 overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.8)] border border-black/50" style={{ top: `${maskTop}%`, left: `${maskLeft}%`, width: `${maskWidth}%`, height: `${maskHeight}%` }}>
-                         <img src={customImg} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${posX - 50}%, ${posY - 50}%) scale(${zoom})` }} />
-                       </div>
-                     )}
-                     {customName && (
-                       <div className="absolute z-20 flex items-center px-3" style={{ top: '4.8%', left: '7.5%', width: '65%', height: '4.5%' }}>
-                         <span className="text-white tracking-wider truncate" style={{ fontFamily: "Georgia, serif", fontSize: '16px', fontWeight: '900', textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{customName}</span>
-                       </div>
-                     )}
-                 </div>
-
-                 <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
-                     {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva' : '💾 Applica Proxy al Mazzo')}
-                 </button>
-               </div>
-              )}
-           </div>
-      );
-
-      if (isStandalone) return <Content />;
-      return (
-        <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-start pt-6 px-2 overflow-y-auto pb-10 animate-fade">
-           <Content />
-        </div>
-      );
-    };
-
-    // --- GAME UTILITY (CON MANA TRACKER) ---
+    // --- GAME UTILITY ---
     const GameUtility = ({view, setView}) => {
-      const [setup, setSetup] = useState(true);
       const [numPlayers, setNumPlayers] = useState(4);
       const [startLife, setStartLife] = useState(40);
       const [players, setPlayers] = useState([]);
@@ -1087,7 +933,7 @@ ${list}`;
 
       return (
         <div className="fixed inset-0 z-[100] bg-black p-1 flex flex-col h-[100dvh] w-[100dvw]">
-          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci</button>
+          <button onClick={() => setView('game')} className="absolute top-2 left-2 z-[110] bg-black/80 px-3 py-2 rounded-full text-white text-xs border border-white/20 font-bold shadow-lg">✖ Esci / Setup</button>
           
           <div className={`flex-1 grid ${gridClass} gap-1 h-full w-full pt-12`}>
              {players.map(p => <PlayerCard key={p.id} player={p} updateStat={updateStat} updateMana={updateMana} toggleImmunity={toggleImmunity} opponents={players.filter(op => op.id !== p.id)} updatePlayerConfig={updatePlayerConfig} />)}
@@ -1097,7 +943,7 @@ ${list}`;
     };
 
     const PlayerCard = ({ player, updateStat, updateMana, toggleImmunity, opponents, updatePlayerConfig }) => {
-      const [viewMode, setViewMode] = useState('life'); // 'life', 'stats', 'mana'
+      const [viewMode, setViewMode] = useState('life'); 
       const [cmdQuery, setCmdQuery] = useState("");
       
       let isDead = false;
@@ -1182,7 +1028,6 @@ ${list}`;
          );
       }
 
-      // VISTA VITA (FRONT)
       return (
         <div className={`w-full h-full flex flex-col rounded-xl border-2 relative ${isDead ? 'border-red-600 bg-red-950/90' : 'border-gray-600 bg-gray-900/90'} overflow-hidden shadow-2xl`}>
           {player.bgUrl && <img src={player.bgUrl} className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-luminosity pointer-events-none" />}
