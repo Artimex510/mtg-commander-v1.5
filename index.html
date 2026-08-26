@@ -31,7 +31,7 @@
 
     const Icons = {
       Menu: () => <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>,
-      Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 001 1m-6 0h6"/></svg>,
+      Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
       Back: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>,
       Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
     };
@@ -141,7 +141,7 @@
       </button>
     );
 
-    // --- PROXY EDITOR UNIVERSALE (Per Home e Deckbuilder) ---
+    // --- PROXY EDITOR UNIVERSALE (FIX BUG RE-RENDER E TASTIERA) ---
     const ProxyEditor = ({card, onClose, onSave, isStandalone}) => {
       const [baseQuery, setBaseQuery] = useState("");
       const [baseCard, setBaseCard] = useState(card ? {name: card.name, type: card.type, img: card.image, cmc: card.cmc} : null);
@@ -218,7 +218,6 @@
              
              const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: card ? card.colors : [], isCommander: false, isCustom: true };
              
-             // Salva nel database
              let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
              savedProxies.push(newProxy); localStorage.setItem('mtg_proxies', JSON.stringify(savedProxies));
              
@@ -232,8 +231,10 @@
         };
       };
 
-      const Content = () => (
-         <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4 relative z-50">
+      // RETURN DIRETTO (Senza sottocomponenti) risolve il bug della tastiera e del re-render!
+      return (
+        <div className={isStandalone ? "max-w-md mx-auto relative z-20" : "fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-start pt-6 px-2 overflow-y-auto pb-10 animate-fade"}>
+           <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
               <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
                  <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
                  {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
@@ -286,23 +287,16 @@
                  </div>
 
                  <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
-                     {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva nel Database' : '💾 Applica Proxy al Mazzo')}
+                     {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva' : '💾 Applica Proxy al Mazzo')}
                  </button>
                </div>
               )}
            </div>
-      );
-
-      if (isStandalone) return <div className="max-w-md mx-auto"><Content /></div>;
-      
-      return (
-        <div className="fixed inset-0 bg-black/95 z-[150] flex flex-col items-center justify-start pt-6 px-2 overflow-y-auto pb-10 animate-fade">
-           <Content />
         </div>
       );
     };
 
-    // --- DECKBUILDER ---
+    // --- DECKBUILDER (CON RAGGRUPPAMENTO CARTE E PAGINAZIONE CORRETTA) ---
     const DeckBuilder = ({navigate, activeDeck}) => {
       const [deckName, setDeckName] = useState(activeDeck ? activeDeck.name : "");
       const [deckFormat, setDeckFormat] = useState(activeDeck ? (activeDeck.format || 'commander') : 'commander');
@@ -313,13 +307,12 @@
       const [mana, setMana] = useState([]);
       const [cardType, setCardType] = useState("");
       const [subType, setSubType] = useState("");
-      const [cmcOp, setCmcOp] = useState("=");
-      const [cmcVal, setCmcVal] = useState("");
       
-      const [results, setResults] = useState([]);
+      // FIX Paginazione a 15 carte 
+      const [allResults, setAllResults] = useState([]);
+      const [localPage, setLocalPage] = useState(0);
+      const [nextScryfallUrl, setNextScryfallUrl] = useState(null);
       const [loading, setLoading] = useState(false);
-      const [pageUrls, setPageUrls] = useState([]);
-      const [currentPageIdx, setCurrentPageIdx] = useState(0);
       
       const [selectedCard, setSelectedCard] = useState(null);
       const [addQty, setAddQty] = useState(1); 
@@ -328,6 +321,9 @@
       const [showImport, setShowImport] = useState(false);
 
       const [editingProxyCard, setEditingProxyCard] = useState(null);
+      
+      // Stato per la gestione delle copie nel mazzo (Modale Raggruppamento)
+      const [managingCard, setManagingCard] = useState(null);
 
       const toggleMana = (m) => setMana(mana.includes(m) ? mana.filter(x => x !== m) : [...mana, m]);
 
@@ -345,20 +341,16 @@
                    id: c.id, name: c.name, image: img, type: c.type_line, cmc: c.cmc, colors: c.color_identity || [], legalities: c.legalities, isCommander: false
                  };
                });
-               setResults(cards);
-
-               if (isNewSearch) {
-                  setPageUrls([url, data.next_page || null]);
-                  setCurrentPageIdx(0);
+               
+               if(isNewSearch) {
+                  setAllResults(cards);
+                  setLocalPage(0);
                } else {
-                  if (data.next_page) {
-                     let newUrls = [...pageUrls];
-                     newUrls[currentPageIdx + 1] = data.next_page;
-                     setPageUrls(newUrls);
-                  }
+                  setAllResults(prev => [...prev, ...cards]);
                }
+               setNextScryfallUrl(data.has_more ? data.next_page : null);
             } else { 
-               if(isNewSearch) { setResults([]); alert("Nessuna carta trovata!"); }
+               if(isNewSearch) { setAllResults([]); alert("Nessuna carta trovata!"); }
             }
             setLoading(false);
           })
@@ -373,7 +365,6 @@
         }
         if (cardType) searchQuery += `t:${cardType} `;
         if (subType) searchQuery += `t:${subType} `;
-        if (cmcVal !== "") searchQuery += `cmc${cmcOp}${cmcVal} `;
         
         if(!searchQuery.trim()) return alert("Inserisci almeno un parametro di ricerca!");
         eseguiRicerca(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(searchQuery.trim())}`, true);
@@ -381,26 +372,27 @@
 
       const loadMyProxies = () => {
         const proxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
-        if (proxies.length === 0) return alert("Non hai ancora creato nessuna Proxy!");
-        setResults(proxies);
-        setPageUrls([]);
-        setCurrentPageIdx(0);
+        if (proxies.length === 0) return alert("Non hai ancora creato nessuna Proxy! Vai in Proxy Lair.");
+        setAllResults(proxies);
+        setLocalPage(0);
+        setNextScryfallUrl(null);
       };
 
+      // Logica Paginazione Locale (Mostra solo 15 carte)
+      const currentResults = allResults.slice(localPage * 15, (localPage + 1) * 15);
+      const maxLocalPages = Math.ceil(allResults.length / 15);
+
       const goToNextPage = () => {
-         if (currentPageIdx + 1 < pageUrls.length && pageUrls[currentPageIdx + 1]) {
-            let nextIdx = currentPageIdx + 1;
-            setCurrentPageIdx(nextIdx);
-            eseguiRicerca(pageUrls[nextIdx], false);
+         if (localPage + 1 < maxLocalPages) {
+            setLocalPage(localPage + 1);
+         } else if (nextScryfallUrl) {
+            eseguiRicerca(nextScryfallUrl, false);
+            setLocalPage(localPage + 1); // Salta alla nuova pagina non appena scaricata
          }
       };
 
       const goToPrevPage = () => {
-         if (currentPageIdx > 0) {
-            let prevIdx = currentPageIdx - 1;
-            setCurrentPageIdx(prevIdx);
-            eseguiRicerca(pageUrls[prevIdx], false);
-         }
+         if (localPage > 0) setLocalPage(localPage - 1);
       };
 
       const addToDeckMulti = () => {
@@ -424,43 +416,45 @@
         navigate('mydecks');
       };
 
-      const handleImport = () => {
-        if(!importText.trim()) return;
-        setLoading(true);
-        const lines = importText.split('\n');
-        let promises = [];
-        
-        for (let i = 0; i < lines.length; i++) {
-          let line = lines[i].trim();
-          if(!line) continue;
-          const match = line.match(/^(\d+)?\s*(.*)$/);
-          let qty = match[1] ? parseInt(match[1]) : 1;
-          let name = match[2];
-          
-          let p = fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`)
-            .then(res => { if(res.ok) return res.json(); throw new Error('Not found'); })
-            .then(c => {
-               let arr = [];
-               for(let j=0; j<qty; j++) {
-                 let img = null;
-                 if (c.image_uris) img = c.image_uris.normal;
-                 else if (c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
-                 arr.push({
-                   id: c.id + '-' + j + Date.now() + Math.random(), deckId: 'import-' + Date.now() + '-' + Math.random() + '-' + j,
-                   name: c.name, image: img, type: c.type_line, cmc: c.cmc, colors: c.color_identity || [], legalities: c.legalities, isCommander: false
-                 });
-               }
-               return arr;
-            }).catch(e => { return []; });
-          promises.push(p);
-        }
-        
-        Promise.all(promises).then(resultsArray => {
-           let newCards = [];
-           resultsArray.forEach(arr => { newCards = newCards.concat(arr); });
-           setDeck(prev => prev.concat(newCards));
-           setShowImport(false); setImportText(""); setLoading(false);
-        });
+      // RAGGRUPPAMENTO CARTE NEL MAZZO
+      const groupedDeck = [];
+      const deckMap = {};
+      deck.forEach(c => {
+         // Uso il nome come chiave. Se è una custom proxy, uso anche l'ID o nome.
+         const key = c.name + (c.isCustom ? c.proxyImage : ""); 
+         if(!deckMap[key]) {
+            deckMap[key] = { ...c, count: 1, isCmdrFlag: c.isCommander };
+            groupedDeck.push(deckMap[key]);
+         } else {
+            deckMap[key].count++;
+            if(c.isCommander) deckMap[key].isCmdrFlag = true;
+         }
+      });
+
+      const updateDeckCardQty = (cardKey, delta) => {
+         if (delta > 0) {
+             const template = deck.find(c => (c.name + (c.isCustom ? c.proxyImage : "")) === cardKey);
+             setDeck([...deck, {...template, deckId: 'card-' + Date.now() + '-' + Math.random(), isCommander: false}]);
+         } else {
+             const idx = deck.findLastIndex(c => (c.name + (c.isCustom ? c.proxyImage : "")) === cardKey);
+             if(idx !== -1) {
+                const newDeck = [...deck];
+                newDeck.splice(idx, 1);
+                setDeck(newDeck);
+                if (newDeck.filter(c => (c.name + (c.isCustom ? c.proxyImage : "")) === cardKey).length === 0) {
+                    setManagingCard(null); // Chiude modale se arriva a 0
+                }
+             }
+         }
+      };
+
+      const toggleGroupCommander = (cardKey) => {
+         setDeck(deck.map(c => {
+            if ((c.name + (c.isCustom ? c.proxyImage : "")) === cardKey) {
+               return {...c, isCommander: !c.isCommander};
+            }
+            return c;
+         }));
       };
 
       const saveInlineProxy = (updatedCard) => {
@@ -468,19 +462,20 @@
          setEditingProxyCard(null);
       };
 
+      // CONTROLLO LEGALITA' 
       let warnings = [];
       const commanders = deck.filter(c => c.isCommander);
       const cmdColors = new Set();
       commanders.forEach(c => { if (c.colors) c.colors.forEach(col => cmdColors.add(col)); });
 
       if (!rulebreaker) {
-         if (deckFormat === 'commander' && deck.length !== 100) warnings.push(`Commander: il mazzo deve avere 100 carte esatte (ora ${deck.length}).`);
+         if (deckFormat === 'commander' && deck.length !== 100) warnings.push(`Commander: il mazzo deve avere 100 carte (ora ${deck.length}).`);
          if ((deckFormat === 'pauper' || deckFormat === 'modern') && deck.length < 60) warnings.push(`${deckFormat.toUpperCase()}: minimo 60 carte (ora ${deck.length}).`);
 
          if (deckFormat === 'commander') {
              if (commanders.length === 0) warnings.push("Commander: Manca il Comandante.");
              if (commanders.length > 0 && commanders.some(c => c.type && !c.type.toLowerCase().includes("legendary") && !c.type.toLowerCase().includes("planeswalker"))) {
-                warnings.push("Il Comandante dev'essere una Creatura Leggendaria o Planeswalker valido.");
+                warnings.push("Il Cmdr dev'essere una Creatura Leggendaria o Planeswalker.");
              }
          }
 
@@ -490,14 +485,15 @@
 
          deck.forEach(c => {
             if (c.legalities && c.legalities[deckFormat] !== 'legal' && c.legalities[deckFormat] !== 'restricted') {
-                if(!warnings.includes(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`)) {
-                    warnings.push(`La carta "${c.name}" è BANNATA o non legale in ${deckFormat.toUpperCase()}.`);
+                if(!warnings.includes(`La carta "${c.name}" è BANNATA in ${deckFormat.toUpperCase()}.`)) {
+                    warnings.push(`La carta "${c.name}" è BANNATA in ${deckFormat.toUpperCase()}.`);
                 }
             }
             if (deckFormat === 'commander' && !c.isCommander && c.colors && c.colors.length > 0) {
                if (cmdColors.size === 0) hasIllegalColor = true;
                else c.colors.forEach(col => { if (!cmdColors.has(col)) hasIllegalColor = true; });
             }
+
             let nLower = c.name.toLowerCase();
             let isBasic = c.type && c.type.toLowerCase().includes("basic");
             let canBypassCount = isBasic || multiCopyAllowed.includes(nLower);
@@ -505,10 +501,10 @@
             
             if (!canBypassCount) {
                if (deckFormat === 'commander' && nameCounts[c.name] > 1) {
-                  if(!warnings.includes(`Regola Singleton violata: hai troppe copie di "${c.name}".`)) warnings.push(`Regola Singleton violata: hai troppe copie di "${c.name}".`);
+                  if(!warnings.includes(`Singleton violata: troppe copie di "${c.name}".`)) warnings.push(`Singleton violata: troppe copie di "${c.name}".`);
                }
                if (deckFormat !== 'commander' && nameCounts[c.name] > 4) {
-                  if(!warnings.includes(`Massimo 4 copie superato per "${c.name}".`)) warnings.push(`Massimo 4 copie superato per "${c.name}".`);
+                  if(!warnings.includes(`Massimo 4 copie per "${c.name}".`)) warnings.push(`Massimo 4 copie per "${c.name}".`);
                }
             }
          });
@@ -521,8 +517,9 @@
       return (
         <div className="max-w-2xl mx-auto space-y-4 relative">
           
+          {/* MODALE AGGIUNTA RICERCA FISSA E CENTRATA */}
           {selectedCard && (
-            <div className="fixed inset-0 bg-black/95 z-[100] h-[100dvh] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setSelectedCard(null)}>
+            <div className="fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setSelectedCard(null)}>
               <div onClick={e => e.stopPropagation()} className="max-w-md w-full flex flex-col items-center">
                  <img src={selectedCard.proxyImage || selectedCard.image} alt={selectedCard.name} className="w-auto max-h-[55vh] object-contain rounded-xl mb-4 shadow-2xl" />
                  
@@ -544,11 +541,34 @@
             </div>
           )}
 
+          {/* MODALE GESTIONE CARTE GIA' NEL MAZZO */}
+          {managingCard && (
+            <div className="fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setManagingCard(null)}>
+              <div onClick={e => e.stopPropagation()} className="max-w-md w-full flex flex-col items-center">
+                 <img src={managingCard.proxyImage || managingCard.image} alt={managingCard.name} className="w-auto max-h-[55vh] object-contain rounded-xl mb-4 shadow-2xl" />
+                 
+                 <div className="bg-gray-800 rounded-xl w-full p-4 flex flex-col gap-3 shadow-xl border border-gray-600">
+                    <div className="flex justify-between items-center bg-gray-900 rounded-lg p-2 border border-gray-700">
+                       <span className="text-gray-400 font-bold px-2">Copie nel Mazzo:</span>
+                       <div className="flex items-center gap-4">
+                          <button onClick={()=>updateDeckCardQty(managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : ""), -1)} className="w-10 h-10 bg-red-600 hover:bg-red-500 rounded font-bold text-xl text-white shadow">-</button>
+                          <span className="text-2xl font-black text-white w-6 text-center">{deck.filter(c => (c.name + (c.isCustom ? c.proxyImage : "")) === (managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : ""))).length}</span>
+                          <button onClick={()=>updateDeckCardQty(managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : ""), 1)} className="w-10 h-10 bg-green-600 hover:bg-green-500 rounded font-bold text-xl text-white shadow">+</button>
+                       </div>
+                    </div>
+                    <div className="flex gap-2 w-full mt-2">
+                      <button onClick={() => setManagingCard(null)} className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg shadow">Chiudi</button>
+                    </div>
+                 </div>
+              </div>
+            </div>
+          )}
+
           {editingProxyCard && (
              <ProxyEditor card={editingProxyCard} onClose={() => setEditingProxyCard(null)} onSave={saveInlineProxy} isStandalone={false} />
           )}
 
-          <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
+          <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm mt-4">
             <input type="text" placeholder="Nome del Mazzo" value={deckName} onChange={e => setDeckName(e.target.value)} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-xl font-bold mb-4" />
             
             <div className="flex justify-between items-center bg-gray-900 p-2 rounded border border-gray-700 mb-3">
@@ -581,9 +601,10 @@
 
           <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
              <h3 className="font-bold text-blue-400 mb-2 border-b border-gray-700 pb-1">Ricerca Carte</h3>
+             <p className="text-[10px] text-gray-400 mb-3 text-center uppercase tracking-wider font-bold">🇺🇸 Cerca in Inglese (es. "Plains", "Angel")</p>
              
              <div className="flex gap-2 mb-3">
-               <input type="text" placeholder="Ricerca in Inglese (es. Plains)" value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white" />
+               <input type="text" placeholder="Nome della carta..." value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white" />
              </div>
              
              <div className="flex gap-2 mb-3 overflow-x-auto pb-1 justify-center">
@@ -592,49 +613,29 @@
                ))}
              </div>
 
-             <div className="grid grid-cols-2 gap-2 mb-4">
-               <select value={cardType} onChange={e => setCardType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm">
-                 <option value="">Tipo...</option>
-                 <option value="creature">Creatura</option>
-                 <option value="artifact">Artefatto</option>
-                 <option value="enchantment">Incantesimo</option>
-                 <option value="instant">Istantaneo</option>
-                 <option value="sorcery">Stregoneria</option>
-                 <option value="land">Terra</option>
-               </select>
-               <input type="text" placeholder="Sottotipo (es. Goblin)" value={subType} onChange={e => setSubType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm" />
-             </div>
-
              <div className="flex gap-2">
                <button onClick={searchCard} className="flex-1 bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
-                 {loading ? <span>Cerco...</span> : <span><Icons.Search /> Cerca</span>}
+                 {loading && !nextPage ? <span>Cerco...</span> : <span><Icons.Search /> Cerca</span>}
                </button>
                <button onClick={loadMyProxies} className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
                  ✨ Le Mie Proxy
                </button>
              </div>
-             <button onClick={() => setShowImport(!showImport)} className="text-sm text-blue-400 hover:text-blue-300 underline mt-4 block text-center w-full">📥 Importa da Testo</button>
-             {showImport && (
-               <div className="mt-2">
-                 <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="1 Sol Ring&#10;1 Command Tower" className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm mb-2"></textarea>
-                 <button onClick={handleImport} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold">{loading ? 'Importo...' : 'Aggiungi Carte'}</button>
-               </div>
-             )}
           </div>
 
-          {results.length > 0 && (
+          {allResults.length > 0 && (
             <div className="bg-gray-800/90 p-4 rounded-xl border border-gray-600 backdrop-blur-sm">
-              <div className="flex justify-between items-center mb-3">
+              <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
                  <h3 className="text-gray-300 text-sm font-bold">Risultati:</h3>
-                 <div className="flex items-center gap-2">
-                    <button onClick={goToPrevPage} disabled={currentPageIdx === 0} className={`px-2 py-1 rounded font-bold text-xs ${currentPageIdx === 0 ? 'bg-gray-700 opacity-40' : 'bg-blue-600 text-white'}`}>⬅️</button>
-                    <span className="text-xs font-bold text-gray-300">Pag. {currentPageIdx + 1}</span>
-                    <button onClick={goToNextPage} disabled={!pageUrls[currentPageIdx + 1]} className={`px-2 py-1 rounded font-bold text-xs ${!pageUrls[currentPageIdx + 1] ? 'bg-gray-700 opacity-40' : 'bg-blue-600 text-white'}`}>➡️</button>
+                 <div className="flex items-center gap-2 bg-gray-900 p-1 rounded-lg border border-gray-700">
+                    <button onClick={goToPrevPage} disabled={localPage === 0} className={`w-8 h-8 rounded font-bold text-lg flex items-center justify-center ${localPage === 0 ? 'bg-gray-700 text-gray-500' : 'bg-blue-600 text-white'}`}>⬅</button>
+                    <span className="text-xs font-bold text-white px-2">Pag {localPage + 1}</span>
+                    <button onClick={goToNextPage} disabled={localPage + 1 >= maxLocalPages && !nextScryfallUrl} className={`w-8 h-8 rounded font-bold text-lg flex items-center justify-center ${(localPage + 1 >= maxLocalPages && !nextScryfallUrl) ? 'bg-gray-700 text-gray-500' : 'bg-blue-600 text-white'}`}>➡</button>
                  </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
-                {results.map((card, i) => (
+                {currentResults.map((card, i) => (
                   <div key={i} className="relative cursor-pointer hover:ring-2 ring-blue-500 rounded shadow-md" onClick={() => { setSelectedCard(card); setAddQty(1); }}>
                     <img src={card.proxyImage || card.image} alt={card.name} className="w-full rounded" />
                   </div>
@@ -645,27 +646,29 @@
 
           {deck.length > 0 && (
             <div className="bg-gray-800/90 p-3 rounded-xl border border-gray-600 shadow-md backdrop-blur-sm">
-              <h3 className="font-bold text-white mb-3 pl-2">La tua Lista:</h3>
+              <h3 className="font-bold text-white mb-3 pl-2">La tua Lista Raggruppata:</h3>
               <div className="space-y-2">
-                {deck.map((card, index) => (
-                  <div key={card.deckId} className={`flex gap-2 bg-gray-900 p-2 rounded-lg border ${card.isCommander ? 'border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'border-gray-700'}`}>
-                    <img src={card.proxyImage || card.image} alt={card.name} className="w-14 rounded object-cover cursor-pointer shadow" onClick={() => { setSelectedCard({image: card.proxyImage || card.image}); setAddQty(1); }} />
-                    <div className="flex-1 text-sm flex flex-col justify-between">
+                {groupedDeck.map((card, index) => (
+                  <div key={index} className={`flex gap-2 bg-gray-900 p-2 rounded-lg border ${card.isCmdrFlag ? 'border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'border-gray-700'}`}>
+                    <div className="relative cursor-pointer" onClick={() => setManagingCard(card)}>
+                        <img src={card.proxyImage || card.image} alt={card.name} className="w-14 rounded object-cover shadow border border-gray-600" />
+                        <div className="absolute -top-2 -right-2 bg-blue-600 text-white font-black text-xs w-6 h-6 flex items-center justify-center rounded-full shadow border border-blue-400">
+                           {card.count}
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 text-sm flex flex-col justify-between pt-1">
                       <h4 className="font-bold text-gray-200 text-xs leading-tight truncate pr-1">{card.name}</h4>
                       
                       <div className="flex items-center justify-between mt-1">
                         {deckFormat === 'commander' && (
                           <label className="flex items-center gap-1 text-yellow-500 text-[10px] font-bold cursor-pointer">
-                            <input type="checkbox" checked={card.isCommander} onChange={() => {
-                              const newDeck = deck.map(c => c.deckId === card.deckId ? {...c, isCommander: !c.isCommander} : c);
-                              setDeck(newDeck);
-                            }} className="accent-yellow-500" /> Cmdr
+                            <input type="checkbox" checked={card.isCmdrFlag} onChange={() => toggleGroupCommander(card.name + (card.isCustom ? card.proxyImage : ""))} className="accent-yellow-500" /> Cmdr
                           </label>
                         )}
                         
                         <div className="flex gap-1 ml-auto">
-                          <button onClick={() => setEditingProxyCard(card)} className="text-[10px] bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded shadow">🎨 Proxy</button>
-                          <button onClick={() => setDeck(deck.filter(c => c.deckId !== card.deckId))} className="text-[10px] bg-red-800 hover:bg-red-700 text-white font-bold px-2 py-1 rounded shadow">✖</button>
+                          <button onClick={() => setEditingProxyCard(deck.find(c => (c.name + (c.isCustom ? c.proxyImage : "")) === (card.name + (card.isCustom ? card.proxyImage : ""))))} className="text-[10px] bg-purple-700 hover:bg-purple-600 text-white font-bold px-2 py-1 rounded shadow">🎨 Proxy</button>
                         </div>
                       </div>
                     </div>
@@ -692,11 +695,6 @@
         }
       };
 
-      const exportText = (deck) => {
-        const text = deck.cards.map(c => `1 ${c.name}`).join('\n');
-        navigator.clipboard.writeText(text); alert("Lista copiata negli appunti!");
-      };
-
       if (decks.length === 0) return <div className="text-center text-gray-400 mt-10 font-bold bg-gray-900/80 p-6 rounded-xl border border-gray-700 backdrop-blur-sm mx-4">Nessun mazzo salvato. Vai nel Deckbuilder!</div>;
 
       return (
@@ -719,8 +717,7 @@
                    <button onClick={() => navigate('analysis', d)} className="col-span-2 bg-blue-600 hover:bg-blue-500 text-white rounded py-3 shadow text-base">📊 Analisi & Master IA</button>
                    <button onClick={() => navigate('deckbuilder', d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow">Modifica</button>
                    <button onClick={() => navigate('printview', d)} className="bg-purple-600 hover:bg-purple-500 text-white rounded py-2 shadow">Stampa PDF</button>
-                   <button onClick={() => exportText(d)} className="bg-gray-700 hover:bg-gray-600 text-white rounded py-2 shadow">Esporta Testo</button>
-                   <button onClick={() => deleteDeck(d.id)} className="bg-red-800 hover:bg-red-700 text-white rounded py-2 shadow">Elimina</button>
+                   <button onClick={() => deleteDeck(d.id)} className="col-span-2 bg-red-800 hover:bg-red-700 text-white rounded py-2 mt-1 shadow border border-red-600">Elimina Mazzo</button>
                  </div>
               </div>
             );
@@ -729,7 +726,7 @@
       );
     };
 
-    // --- ANALISI MAZZO E IA ---
+    // --- ANALISI MAZZO ---
     const DeckAnalysis = ({deck, navigate}) => {
       if(!deck) return null;
 
@@ -774,6 +771,12 @@ Lista:
 ${list}`;
          navigator.clipboard.writeText(prompt);
          alert("Prompt copiato! Incollalo su ChatGPT o Gemini.");
+      };
+
+      const copyList = () => {
+         const list = deck.cards.map(c => `1 ${c.name}`).join('\n');
+         navigator.clipboard.writeText(list);
+         alert("Lista carte copiata!");
       };
 
       return (
@@ -847,13 +850,15 @@ ${list}`;
                <button onClick={copyPrompt} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all">
                  🤖 Copia Prompt IA (Gemini/ChatGPT)
                </button>
+               <button onClick={copyList} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl shadow border border-gray-600 flex items-center justify-center gap-2 mt-2">
+                 📋 Copia solo Lista Testuale
+               </button>
              </div>
            </div>
          </div>
       );
     };
 
-    // --- STAMPA ---
     const PrintView = ({deck, navigate}) => {
       if(!deck) return null;
       return (
@@ -872,7 +877,7 @@ ${list}`;
       );
     };
 
-    // --- GAME UTILITY E RESTO APP (DADO, REGOLE) ---
+    // --- GAME UTILITY (LIFE & MANA TRACKER) ---
     const GameUtility = ({view, setView}) => {
       const [setup, setSetup] = useState(true);
       const [numPlayers, setNumPlayers] = useState(4);
@@ -967,7 +972,7 @@ ${list}`;
                  if(imgUrl) updatePlayerConfig(player.id, 'bgUrl', imgUrl);
                  setCmdQuery("");
                } else alert("Comandante non trovato");
-            });
+            }).catch(e => console.error(e));
       };
 
       if (viewMode === 'stats') {
@@ -1001,7 +1006,7 @@ ${list}`;
               </div>
             </div>
             
-            <button onClick={() => toggleImmunity(player.id)} className={`w-full py-1 mt-1 text-[10px] font-bold rounded-lg shadow-md transition-colors ${player.immune ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-600'}`}>
+            <button onClick={() => toggleImmunity(player.id)} className={`w-full py-1 mt-1 text-[10px] font-bold rounded-lg shadow-md transition-colors ${player.immune ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border border-gray-600 hover:bg-gray-700'}`}>
               {player.immune ? '🛡️ Immunità Attiva' : 'Attiva Immunità'}
             </button>
           </div>
@@ -1066,6 +1071,7 @@ ${list}`;
       </div>
     );
 
+    // --- DICE ROLLER ---
     const DiceRoller = () => {
       const [numPlayers, setNumPlayers] = useState(4);
       const [results, setResults] = useState([]);
@@ -1105,6 +1111,7 @@ ${list}`;
       );
     };
 
+    // --- JUDGE DESK (REGOLE) ---
     const RulesAI = () => {
       const [question, setQuestion] = useState("");
       const searchRuling = () => { if(question) window.open(`https://www.google.com/search?q=MTG+Ruling+${encodeURIComponent(question)}`, '_blank'); };
