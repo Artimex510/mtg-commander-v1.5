@@ -10,10 +10,17 @@
   <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
   <style>
     body { -webkit-font-smoothing: antialiased; overflow-x: hidden; user-select: none; -webkit-touch-callout: none; background-color: #000; }
-    .animate-fade { animation: fadeIn 0.3s ease-in-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* FIX CRUCIALE PER LE FINESTRE (Tolto il transform che bloccava le coordinate) */
+    .animate-fade { animation: fadeIn 0.2s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes splashFade { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
+    
     button { touch-action: manipulation; }
+    
+    /* Nasconde freccette dai campi numero su alcuni browser */
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
     @media print {
       body { background: white !important; color: black; }
@@ -141,7 +148,7 @@
       </button>
     );
 
-    // --- PROXY EDITOR UNIVERSALE (FISSO E SICURO) ---
+    // --- PROXY EDITOR UNIVERSALE ---
     const ProxyEditor = ({card, onClose, onSave, isStandalone}) => {
       const [baseQuery, setBaseQuery] = useState("");
       const [baseCard, setBaseCard] = useState(card ? {name: card.name, type: card.type, img: card.image, cmc: card.cmc} : null);
@@ -218,7 +225,6 @@
              }
 
              const finalDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-             
              const newProxy = { id: 'proxy-' + Date.now(), name: customName || baseCard.name, image: finalDataUrl, proxyImage: finalDataUrl, type: baseCard.type, cmc: baseCard.cmc || 0, colors: card ? card.colors : [], isCommander: false, isCustom: true };
              
              let savedProxies = JSON.parse(localStorage.getItem('mtg_proxies') || '[]');
@@ -236,11 +242,6 @@
 
       const editorUI = (
         <div className="w-full max-w-md bg-gray-800 p-4 rounded-xl border border-gray-600 shadow-2xl space-y-4">
-          <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
-             <h2 className="text-xl font-bold text-purple-400">Proxy Creator</h2>
-             {!isStandalone && <button onClick={onClose} className="bg-gray-600 px-3 py-1 rounded text-white font-bold">✖ Chiudi</button>}
-          </div>
-          
           {isStandalone && (
             <div className="flex gap-2 mb-4">
               <input type="text" placeholder="Cerca Originale (es. Sol Ring)" value={baseQuery} onChange={e => setBaseQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 p-2 rounded text-white" />
@@ -260,7 +261,7 @@
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-blue-400 uppercase">Cornice Riquadro</p>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Su</span><input type="range" min="0" max="30" step="0.5" value={maskTop} onChange={e=>setMaskTop(e.target.value)} className="w-full accent-blue-500" /></div>
-                      <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Altezza</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
+                      <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Alt.</span><input type="range" min="20" max="100" step="0.5" value={maskHeight} onChange={e=>setMaskHeight(e.target.value)} className="w-full accent-blue-500" /></div>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Sx</span><input type="range" min="0" max="20" step="0.2" value={maskLeft} onChange={e=>setMaskLeft(e.target.value)} className="w-full accent-blue-500" /></div>
                       <div className="flex items-center gap-2"><span className="text-[10px] w-10 text-white font-bold">Largh.</span><input type="range" min="50" max="100" step="0.5" value={maskWidth} onChange={e=>setMaskWidth(e.target.value)} className="w-full accent-blue-500" /></div>
                     </div>
@@ -287,7 +288,7 @@
                  )}
              </div>
 
-             <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-lg">
+             <button onClick={eseguiSalvataggio} disabled={isGenerating} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-lg shadow-[0_0_15px_rgba(22,163,74,0.5)] mt-4 flex justify-center">
                  {isGenerating ? 'Attendere...' : (isStandalone ? '💾 Crea & Salva Database' : '💾 Applica Proxy al Mazzo')}
              </button>
            </div>
@@ -296,16 +297,23 @@
       );
 
       if (isStandalone) {
-         return <div className="max-w-md mx-auto pt-4 pb-10 relative z-20">{editorUI}</div>;
+         return <div className="max-w-md mx-auto relative z-20">{editorUI}</div>;
       }
       return (
-        <div className="fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-start pt-6 px-2 overflow-y-auto pb-10 animate-fade">
-           {editorUI}
+        <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
+           <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
+             <button onClick={onClose} className="text-blue-400 font-bold flex items-center gap-1"><Icons.Back /> Indietro</button>
+             <h2 className="text-lg font-bold text-white truncate text-center">Proxy Creator</h2>
+             <div className="w-8"></div>
+           </div>
+           <div className="flex-1 p-4 flex flex-col items-center pb-20">
+              {editorUI}
+           </div>
         </div>
       );
     };
 
-    // --- DECKBUILDER (RICERCA STABILE, PAGINAZIONE 15 CARTE) ---
+    // --- DECKBUILDER ---
     const DeckBuilder = ({navigate, activeDeck}) => {
       const [deckName, setDeckName] = useState(activeDeck ? activeDeck.name : "");
       const [deckFormat, setDeckFormat] = useState(activeDeck ? (activeDeck.format || 'commander') : 'commander');
@@ -326,8 +334,10 @@
       
       const [selectedCard, setSelectedCard] = useState(null);
       const [addQty, setAddQty] = useState(1); 
-      const [managingCard, setManagingCard] = useState(null);
       
+      const [managingCard, setManagingCard] = useState(null);
+      const [manageQty, setManageQty] = useState(0);
+
       const [importText, setImportText] = useState("");
       const [showImport, setShowImport] = useState(false);
 
@@ -391,12 +401,8 @@
       const currentResults = allResults.slice(localPage * 15, (localPage + 1) * 15);
 
       const goToNextPage = () => {
-         if (localPage + 1 < maxLocalPages) {
-            setLocalPage(localPage + 1);
-         } else if (nextScryfallUrl) {
-            eseguiRicerca(nextScryfallUrl, false);
-            setLocalPage(localPage + 1);
-         }
+         if (localPage + 1 < maxLocalPages) { setLocalPage(localPage + 1); } 
+         else if (nextScryfallUrl) { eseguiRicerca(nextScryfallUrl, false); setLocalPage(localPage + 1); }
       };
 
       const goToPrevPage = () => { if (localPage > 0) setLocalPage(localPage - 1); };
@@ -404,7 +410,7 @@
       const addToDeckMulti = () => {
         let newCards = [];
         for(let i=0; i<addQty; i++) {
-           newCards.push({...selectedCard, deckId: 'card-' + Date.now() + '-' + Math.random(), isCommander: false});
+           newCards.push({...selectedCard, deckId: 'card-' + Date.now() + '-' + i + '-' + Math.random(), isCommander: false});
         }
         setDeck([...deck, ...newCards]);
         setSelectedCard(null);
@@ -466,6 +472,7 @@
          setEditingProxyCard(null);
       };
 
+      // RAGGRUPPAMENTO CARTE
       const groupedDeck = [];
       const deckMap = {};
       deck.forEach(c => {
@@ -479,19 +486,15 @@
          }
       });
 
-      const updateDeckCardQty = (cardKey, delta) => {
-         if (delta > 0) {
-             const template = deck.find(c => (c.name + (c.isCustom ? c.proxyImage : "")) === cardKey);
-             setDeck([...deck, {...template, deckId: 'card-' + Date.now() + '-' + Math.random(), isCommander: false}]);
-         } else {
-             const idx = deck.findLastIndex(c => (c.name + (c.isCustom ? c.proxyImage : "")) === cardKey);
-             if(idx !== -1) {
-                const newDeck = [...deck];
-                newDeck.splice(idx, 1);
-                setDeck(newDeck);
-                if (newDeck.filter(c => (c.name + (c.isCustom ? c.proxyImage : "")) === cardKey).length === 0) setManagingCard(null);
-             }
+      // AGGIORNO LE COPIE IN UN COLPO SOLO (SOLUZIONE AL PROBLEMA DELLE 80 TERRE)
+      const applyManageQty = () => {
+         const cardKey = managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : "");
+         let newDeck = deck.filter(c => (c.name + (c.isCustom ? c.proxyImage : "")) !== cardKey);
+         for(let i=0; i<manageQty; i++) {
+            newDeck.push({...managingCard, deckId: 'card-' + Date.now() + '-' + i + '-' + Math.random(), isCommander: false});
          }
+         setDeck(newDeck);
+         setManagingCard(null);
       };
 
       const toggleGroupCommander = (cardKey) => {
@@ -501,7 +504,7 @@
          }));
       };
 
-      // CONTROLLO LEGALITA' 
+      // CONTROLLO LEGALITA'
       let warnings = [];
       const commanders = deck.filter(c => c.isCommander);
       const cmdColors = new Set();
@@ -553,48 +556,61 @@
       return (
         <div className="max-w-2xl mx-auto space-y-4 relative z-10">
           
-          {/* MODALE ANTEPRIMA RICERCA FISSA */}
+          {/* MODALE NUOVA PAGINA: AGGIUNGI CARTA (Fix Posizione & Inserimento Testuale) */}
           {selectedCard && (
-            <div className="fixed inset-0 bg-black/95 z-[9999] h-[100dvh] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setSelectedCard(null)}>
-              <div onClick={e => e.stopPropagation()} className="max-w-md w-full flex flex-col items-center">
-                 <img src={selectedCard.proxyImage || selectedCard.image} alt={selectedCard.name} className="w-auto max-h-[55vh] object-contain rounded-xl mb-4 shadow-2xl" />
+            <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
+               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
+                 <button onClick={() => setSelectedCard(null)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
+                 <h2 className="ml-4 font-bold text-white truncate max-w-[50%]">{selectedCard.name}</h2>
+                 <div className="w-8"></div>
+               </div>
+               
+               <div className="flex-1 flex flex-col items-center justify-start p-6 pb-20">
+                 <img src={selectedCard.proxyImage || selectedCard.image} alt={selectedCard.name} className="w-auto max-h-[50vh] object-contain rounded-xl mb-6 shadow-2xl" />
                  
-                 <div className="bg-gray-800 rounded-xl w-full p-4 flex flex-col gap-3 shadow-xl border border-gray-600">
-                    <div className="flex justify-between items-center bg-gray-900 rounded-lg p-2 border border-gray-700">
-                       <span className="text-gray-400 font-bold px-2">Aggiungi Copie:</span>
-                       <div className="flex items-center gap-4">
-                          <button onClick={()=>setAddQty(Math.max(1, addQty-1))} className="w-10 h-10 bg-red-600 hover:bg-red-500 rounded font-bold text-xl text-white shadow">-</button>
-                          <span className="text-2xl font-black text-white w-6 text-center">{addQty}</span>
-                          <button onClick={()=>setAddQty(addQty+1)} className="w-10 h-10 bg-green-600 hover:bg-green-500 rounded font-bold text-xl text-white shadow">+</button>
+                 <div className="bg-gray-800 rounded-xl w-full max-w-sm p-4 flex flex-col gap-4 shadow-xl border border-gray-600">
+                    <div className="flex justify-between items-center bg-gray-900 rounded-lg p-3 border border-gray-700">
+                       <span className="text-gray-400 font-bold">Aggiungi Copie:</span>
+                       <div className="flex items-center gap-3">
+                          <button onClick={()=>setAddQty(Math.max(1, addQty-1))} className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-2xl text-white shadow">-</button>
+                          <input type="number" inputMode="numeric" min="1" max="999" value={addQty} onChange={e=>setAddQty(parseInt(e.target.value) || 0)} className="w-16 h-12 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl font-black outline-none focus:border-blue-500" />
+                          <button onClick={()=>setAddQty(addQty+1)} className="w-12 h-12 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-2xl text-white shadow">+</button>
                        </div>
                     </div>
-                    <div className="flex gap-2 w-full mt-2">
-                      <button onClick={() => setSelectedCard(null)} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg shadow">Annulla</button>
-                      <button onClick={addToDeckMulti} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow">+ Aggiungi</button>
-                    </div>
+                    
+                    <button onClick={addToDeckMulti} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-lg py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                      + AGGIUNGI AL MAZZO
+                    </button>
                  </div>
               </div>
             </div>
           )}
 
-          {/* MODALE GESTIONE CARTE GIA' NEL MAZZO */}
+          {/* MODALE NUOVA PAGINA: GESTIONE COPIE NEL MAZZO */}
           {managingCard && (
-            <div className="fixed inset-0 bg-black/95 z-[9999] h-[100dvh] flex flex-col items-center justify-center p-4 animate-fade" onClick={() => setManagingCard(null)}>
-              <div onClick={e => e.stopPropagation()} className="max-w-md w-full flex flex-col items-center">
-                 <img src={managingCard.proxyImage || managingCard.image} alt={managingCard.name} className="w-auto max-h-[55vh] object-contain rounded-xl mb-4 shadow-2xl" />
+            <div className="fixed inset-0 bg-gray-900 z-[9999] h-[100dvh] w-full flex flex-col animate-fade overflow-y-auto">
+               <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
+                 <button onClick={() => setManagingCard(null)} className="text-blue-400 font-bold flex items-center gap-1 text-lg"><Icons.Back /> Indietro</button>
+                 <h2 className="ml-4 font-bold text-white truncate max-w-[50%]">{managingCard.name}</h2>
+                 <div className="w-8"></div>
+               </div>
+               
+               <div className="flex-1 flex flex-col items-center justify-start p-6 pb-20">
+                 <img src={managingCard.proxyImage || managingCard.image} alt={managingCard.name} className="w-auto max-h-[50vh] object-contain rounded-xl mb-6 shadow-2xl" />
                  
-                 <div className="bg-gray-800 rounded-xl w-full p-4 flex flex-col gap-3 shadow-xl border border-gray-600">
-                    <div className="flex justify-between items-center bg-gray-900 rounded-lg p-2 border border-gray-700">
-                       <span className="text-gray-400 font-bold px-2">Copie nel Mazzo:</span>
-                       <div className="flex items-center gap-4">
-                          <button onClick={()=>updateDeckCardQty(managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : ""), -1)} className="w-10 h-10 bg-red-600 hover:bg-red-500 rounded font-bold text-xl text-white shadow">-</button>
-                          <span className="text-2xl font-black text-white w-6 text-center">{deck.filter(c => (c.name + (c.isCustom ? c.proxyImage : "")) === (managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : ""))).length}</span>
-                          <button onClick={()=>updateDeckCardQty(managingCard.name + (managingCard.isCustom ? managingCard.proxyImage : ""), 1)} className="w-10 h-10 bg-green-600 hover:bg-green-500 rounded font-bold text-xl text-white shadow">+</button>
+                 <div className="bg-gray-800 rounded-xl w-full max-w-sm p-4 flex flex-col gap-4 shadow-xl border border-gray-600">
+                    <div className="flex justify-between items-center bg-gray-900 rounded-lg p-3 border border-gray-700">
+                       <span className="text-gray-400 font-bold">Copie Totali:</span>
+                       <div className="flex items-center gap-3">
+                          <button onClick={()=>setManageQty(Math.max(0, manageQty-1))} className="w-12 h-12 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-2xl text-white shadow">-</button>
+                          <input type="number" inputMode="numeric" min="0" max="999" value={manageQty} onChange={e=>setManageQty(parseInt(e.target.value) || 0)} className="w-16 h-12 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl font-black outline-none focus:border-blue-500" />
+                          <button onClick={()=>setManageQty(manageQty+1)} className="w-12 h-12 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-2xl text-white shadow">+</button>
                        </div>
                     </div>
-                    <div className="flex gap-2 w-full mt-2">
-                      <button onClick={() => setManagingCard(null)} className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg shadow">Chiudi</button>
-                    </div>
+                    
+                    <button onClick={applyManageQty} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-lg py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                      CONFERMA MODIFICHE
+                    </button>
                  </div>
               </div>
             </div>
@@ -609,7 +625,7 @@
             
             <div className="flex justify-between items-center bg-gray-900 p-2 rounded border border-gray-700 mb-3">
               <span className="text-gray-400 text-sm font-bold ml-2">Formato:</span>
-              <select value={deckFormat} onChange={e => setDeckFormat(e.target.value)} className="bg-gray-800 text-white p-2 rounded font-bold border border-gray-600">
+              <select value={deckFormat} onChange={e => setDeckFormat(e.target.value)} className="bg-gray-800 text-white p-2 rounded font-bold border border-gray-600 outline-none">
                  <option value="commander">Commander</option>
                  <option value="pauper">Pauper</option>
                  <option value="modern">Modern</option>
@@ -640,17 +656,17 @@
              <p className="text-[10px] text-gray-400 mb-3 text-center uppercase tracking-wider font-bold">🇺🇸 Cerca in Inglese (es. "Plains", "Angel")</p>
              
              <div className="flex gap-2 mb-3">
-               <input type="text" placeholder="Nome della carta..." value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white" />
+               <input type="text" placeholder="Nome della carta..." value={query} onChange={e => setQuery(e.target.value)} onKeyPress={e => e.key === 'Enter' && searchCard()} className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white outline-none" />
              </div>
              
              <div className="flex gap-2 mb-3 overflow-x-auto pb-1 justify-center">
                {ManaColors.map(m => (
-                 <button key={m.id} onClick={() => toggleMana(m.id)} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold border-2 ${mana.includes(m.id) ? 'border-white scale-110' : 'border-transparent opacity-50'} ${m.color}`}>{m.label}</button>
+                 <button key={m.id} onClick={() => toggleMana(m.id)} className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold border-2 ${mana.includes(m.id) ? 'border-white scale-110' : 'border-transparent opacity-50'} ${m.color}`}>{m.label}</button>
                ))}
              </div>
 
-             <div className="grid grid-cols-2 gap-2 mb-3">
-               <select value={cardType} onChange={e => setCardType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm">
+             <div className="grid grid-cols-2 gap-2 mb-4">
+               <select value={cardType} onChange={e => setCardType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm outline-none">
                  <option value="">Tipo...</option>
                  <option value="creature">Creatura</option>
                  <option value="artifact">Artefatto</option>
@@ -659,30 +675,30 @@
                  <option value="sorcery">Stregoneria</option>
                  <option value="land">Terra</option>
                </select>
-               <input type="text" placeholder="Sottotipo (es. Goblin)" value={subType} onChange={e => setSubType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm" />
+               <input type="text" placeholder="Sottotipo (es. Goblin)" value={subType} onChange={e => setSubType(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm outline-none" />
              </div>
 
              <div className="flex gap-2 mb-4">
                <span className="text-gray-300 text-sm py-2 font-bold">Costo:</span>
-               <select value={cmcOp} onChange={e => setCmcOp(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold">
+               <select value={cmcOp} onChange={e => setCmcOp(e.target.value)} className="bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold outline-none">
                  <option value="=">=</option><option value=">">&gt;</option><option value="<">&lt;</option>
                </select>
-               <input type="number" min="0" value={cmcVal} onChange={e => setCmcVal(e.target.value)} className="w-16 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold text-center" />
+               <input type="number" inputMode="numeric" min="0" value={cmcVal} onChange={e => setCmcVal(e.target.value)} className="w-16 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm font-bold text-center outline-none" />
              </div>
 
              <div className="flex gap-2">
                <button onClick={searchCard} className="flex-1 bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
-                 {loading ? <span>Cerco...</span> : <span><Icons.Search /> Cerca</span>}
+                 {loading && !nextPage ? <span>Cerco...</span> : <span><Icons.Search /> Cerca</span>}
                </button>
                <button onClick={loadMyProxies} className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded text-white shadow-lg flex justify-center items-center gap-2">
-                 ✨ Le Mie Proxy
+                 ✨ Mie Proxy
                </button>
              </div>
              
              <button onClick={() => setShowImport(!showImport)} className="text-sm text-blue-400 hover:text-blue-300 underline mt-4 block text-center w-full">📥 Importa da Testo</button>
              {showImport && (
                <div className="mt-2">
-                 <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="1 Sol Ring&#10;1 Command Tower" className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm mb-2"></textarea>
+                 <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="1 Sol Ring&#10;1 Command Tower" className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm mb-2 outline-none"></textarea>
                  <button onClick={handleImport} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold">{loading ? 'Importo...' : 'Aggiungi Carte'}</button>
                </div>
              )}
@@ -715,14 +731,14 @@
               <div className="space-y-2">
                 {groupedDeck.map((card, index) => (
                   <div key={index} className={`flex gap-2 bg-gray-900 p-2 rounded-lg border ${card.isCmdrFlag ? 'border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'border-gray-700'}`}>
-                    <div className="relative cursor-pointer" onClick={() => setManagingCard(card)}>
+                    <div className="relative cursor-pointer shrink-0" onClick={() => { setManagingCard(card); setManageQty(card.count); }}>
                         <img src={card.proxyImage || card.image} alt={card.name} className="w-14 rounded object-cover shadow border border-gray-600" />
                         <div className="absolute -top-2 -right-2 bg-blue-600 text-white font-black text-xs w-6 h-6 flex items-center justify-center rounded-full shadow border border-blue-400">
                            {card.count}
                         </div>
                     </div>
                     
-                    <div className="flex-1 text-sm flex flex-col justify-between pt-1">
+                    <div className="flex-1 text-sm flex flex-col justify-between pt-1 overflow-hidden">
                       <h4 className="font-bold text-gray-200 text-xs leading-tight truncate pr-1">{card.name}</h4>
                       
                       <div className="flex items-center justify-between mt-1">
@@ -947,7 +963,7 @@ ${list}`;
       );
     };
 
-    // --- GAME UTILITY (LIFE TRACKER, DANNI CMDR SYNC & ICONE) ---
+    // --- GAME UTILITY (LIFE TRACKER, MANA E SINCRONIZZAZIONE DANNI CMDR) ---
     const GameUtility = ({view, setView}) => {
       const [setup, setSetup] = useState(true);
       const [numPlayers, setNumPlayers] = useState(4);
@@ -974,7 +990,7 @@ ${list}`;
              let prevVal = newDmg[opponentId] || 0;
              newDmg[opponentId] = Math.max(0, prevVal + amount);
              
-             // SINCRONIZZAZIONE: Calcolo la differenza e la scalo dalla vita
+             // SCALA LA VITA IN AUTOMATICO (In base alla differenza del danno comandante)
              let diff = newDmg[opponentId] - prevVal;
              return { ...p, cmdDmg: newDmg, life: Math.max(0, p.life - diff) };
           }
@@ -1005,7 +1021,7 @@ ${list}`;
           </div>
           <div className="mb-6">
             <label className="block text-gray-300 font-bold mb-2">Punti Vita Iniziali</label>
-            <select value={startLife} onChange={e => setStartLife(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center text-xl font-bold">
+            <select value={startLife} onChange={e => setStartLife(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center text-xl font-bold outline-none">
               <option value={40}>40 (Commander)</option>
               <option value={20}>20 (Standard)</option>
             </select>
@@ -1050,7 +1066,6 @@ ${list}`;
             }).catch(e => console.error(e));
       };
 
-      // HEADER COMUNE PER TUTTE LE SCHERMATE (CON ICONE VELENO E EMBLEMA)
       const PlayerHeader = () => (
          <div className="flex justify-between items-center bg-black/60 backdrop-blur-sm p-2 z-30 border-b border-gray-700 shadow-sm h-[15%] min-h-[30px]">
             <div className="flex items-center gap-2 overflow-hidden flex-1">
@@ -1074,7 +1089,7 @@ ${list}`;
               <div className="bg-gray-800 p-1 rounded-lg border border-gray-700">
                 <p className="text-[10px] text-blue-300 font-bold mb-1 uppercase">🖼️ Sfondo Cmdr</p>
                 <div className="flex gap-1">
-                  <input type="text" placeholder="Nome Inglese" value={cmdQuery} onChange={e=>setCmdQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 text-white text-[10px]" />
+                  <input type="text" placeholder="Nome Inglese" value={cmdQuery} onChange={e=>setCmdQuery(e.target.value)} className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 text-white text-[10px] outline-none" />
                   <button onClick={searchCmdBg} className="bg-blue-600 px-2 rounded text-white font-bold text-[10px]">OK</button>
                 </div>
               </div>
@@ -1169,7 +1184,7 @@ ${list}`;
         <div className="max-w-md mx-auto bg-gray-800/90 p-6 rounded-xl border border-gray-600 mt-10 backdrop-blur-sm shadow-xl">
           <h2 className="text-3xl font-black mb-6 text-center text-purple-500 drop-shadow-md">Tira il Dado (D20)</h2>
           <label className="block text-gray-300 font-bold mb-2">Numero Giocatori</label>
-          <input type="number" min="2" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center mb-6 font-bold text-xl" />
+          <input type="number" min="2" max="6" value={numPlayers} onChange={e => setNumPlayers(parseInt(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white text-center mb-6 font-bold text-xl outline-none" />
           <button onClick={rollDice} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-4 rounded-xl text-xl mb-6 shadow-[0_0_15px_rgba(147,51,234,0.5)]">TIRA IL DADO</button>
           {results.length > 0 && (
             <div className="space-y-2 animate-fade">
@@ -1197,7 +1212,7 @@ ${list}`;
             <h2 className="text-3xl font-black mb-4 text-green-500 drop-shadow-md">Judge Desk</h2>
             <p className="text-sm text-gray-300 mb-6 font-semibold">Cerca il tuo dubbio tra i Ruling Ufficiali o contatta un Arbitro vero.</p>
             
-            <textarea className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-3 text-white mb-4 font-semibold" placeholder="Scrivi il tuo dubbio sulla combo..." value={question} onChange={(e) => setQuestion(e.target.value)}></textarea>
+            <textarea className="w-full h-24 bg-gray-900 border border-gray-600 rounded p-3 text-white mb-4 font-semibold outline-none" placeholder="Scrivi il tuo dubbio sulla combo..." value={question} onChange={(e) => setQuestion(e.target.value)}></textarea>
             <button onClick={searchRuling} className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-xl shadow-lg mb-6 flex justify-center items-center gap-2">🔍 Cerca Ruling Online</button>
 
             <div className="border-t border-gray-700 pt-6 space-y-3">
